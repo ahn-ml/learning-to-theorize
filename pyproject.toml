@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "learning-to-theorize"
+version = "0.1.0"
+description = "Official PyTorch implementation of Learning to Theorize the World from Observation"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  {name = "Doojin Baek"},
+  {name = "Gyubin Lee"},
+  {name = "Junyeob Baek"},
+  {name = "Hosung Lee"},
+  {name = "Sungjin Ahn"},
+]
+dependencies = [
+  "h5py>=3.14,<4",
+  "numpy>=2.0,<3",
+  "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+model = ["torch>=2.7,<3"]
+train = ["torch>=2.7,<3", "wandb>=0.20,<1"]
+arithmetic = ["torch>=2.7,<3", "omegaconf>=2.3,<3", "einops>=0.8,<1", "lightning>=2.5,<3", "tqdm>=4.67,<5", "matplotlib>=3.10,<4"]
+test = ["pytest>=8,<10"]
+# Image Editing: primitives are defined through torchvision/Pillow, and LPIPS
+# is an optional evaluation metric.
+image-editing = ["torch>=2.7,<3", "torchvision>=0.22,<1", "pillow>=10,<12"]
+image-editing-eval = ["lpips>=0.1.4,<0.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
