@@ -1,0 +1,819 @@
+{
+  "description": "Verified measured reproduction; paper baselines were not rerun.",
+  "id_is_selection_data": true,
+  "results": [
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 96.04,
+      "sample_sd": 4.160144228269016,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        97.86,
+        98.98,
+        91.28
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 95.16666666666667,
+      "sample_sd": 3.822791301305017,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        96.32,
+        98.28,
+        90.9
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 88.07666666666667,
+      "sample_sd": 9.729554631807833,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        91.03999999999999,
+        95.98,
+        77.21000000000001
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 94.31333333333333,
+      "sample_sd": 5.0614754107210045,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        95.06,
+        98.96000000000001,
+        88.92
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 90.58,
+      "sample_sd": 9.160633165889791,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        92.36,
+        98.72,
+        80.66
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 83.72333333333334,
+      "sample_sd": 12.33194766990735,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        84.35000000000001,
+        95.73,
+        71.09
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 96.26666666666667,
+      "sample_sd": 2.2866861029300303,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        98.86,
+        95.39999999999999,
+        94.54
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 87.52666666666667,
+      "sample_sd": 6.175421712995258,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        93.66,
+        87.61,
+        81.31
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 96.96666666666667,
+      "sample_sd": 3.0528893418093896,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        98.26,
+        99.16,
+        93.47999999999999
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 96.54666666666667,
+      "sample_sd": 3.0153164565818535,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        97.54,
+        98.94,
+        93.16
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 90.09,
+      "sample_sd": 8.462877761140128,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        93.36,
+        96.43,
+        80.47999999999999
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 95.79333333333334,
+      "sample_sd": 3.9585013999408156,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        96.64,
+        99.26,
+        91.47999999999999
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 93.40666666666667,
+      "sample_sd": 7.469252528421655,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        96.12,
+        99.14,
+        84.96000000000001
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 87.96333333333332,
+      "sample_sd": 10.103763325282973,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        89.82,
+        97.00999999999999,
+        77.06
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "1.00",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 97.63333333333333,
+      "sample_sd": 1.3078735922608604,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        99.11999999999999,
+        97.11999999999999,
+        96.66
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "gridworld",
+      "alpha": "1.00",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 91.73666666666666,
+      "sample_sd": 4.130790884725751,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        96.06,
+        91.32000000000001,
+        87.83
+      ],
+      "source_commit": "effc852f1aa30511cf6955b829f656cafd91f393"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 66.96666666666667,
+      "sample_sd": 5.9277426844738565,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        68.38,
+        72.06,
+        60.46
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 17.233333333333334,
+      "sample_sd": 18.418559480408163,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        6.800000000000001,
+        38.5,
+        6.4
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 14.846666666666666,
+      "sample_sd": 4.3322665353522885,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        11.5,
+        19.74,
+        13.3
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 83.61999999999999,
+      "sample_sd": 11.65124886010079,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        77.96,
+        97.02,
+        75.88000000000001
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 55.14666666666667,
+      "sample_sd": 35.92085373892627,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        29.959999999999997,
+        96.28,
+        39.2
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.33",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 64.05333333333334,
+      "sample_sd": 18.128059282044877,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        52.7,
+        84.96000000000001,
+        54.50000000000001
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 67.92666666666666,
+      "sample_sd": 4.71191397770941,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        70.98,
+        70.3,
+        62.5
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 54.08,
+      "sample_sd": 15.179143585854899,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        53.2,
+        69.67999999999999,
+        39.36
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 17.386666666666667,
+      "sample_sd": 5.666968619406088,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        21.94,
+        19.18,
+        11.04
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 90.53999999999999,
+      "sample_sd": 8.698574595874888,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        96.76,
+        94.26,
+        80.60000000000001
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "compositional-ood",
+      "unit": "percent",
+      "mean": 86.41333333333333,
+      "sample_sd": 18.641205254310503,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        98.66,
+        95.62,
+        64.96
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "0.66",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 68.74666666666667,
+      "sample_sd": 8.409621473843714,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        74.18,
+        73.0,
+        59.06
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "id",
+      "unit": "percent",
+      "mean": 74.81333333333333,
+      "sample_sd": 8.284596147871861,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        72.46000000000001,
+        84.02,
+        67.96
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 32.17333333333333,
+      "sample_sd": 7.7450973740381945,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        27.02,
+        41.08,
+        28.42
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "1.00",
+      "model": "NEO-S",
+      "split": "id",
+      "unit": "percent",
+      "mean": 96.0,
+      "sample_sd": 2.1315721897228808,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        97.16,
+        97.3,
+        93.54
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "arithmetic_factorization",
+      "alpha": "1.00",
+      "model": "NEO-S",
+      "split": "length-ood",
+      "unit": "percent",
+      "mean": 81.31333333333333,
+      "sample_sd": 3.392128142233624,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        77.72,
+        84.46000000000001,
+        81.76
+      ],
+      "source_commit": "3d2dd1cfe2c001edea4a48569b879c026e2cdfaf"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "L1",
+      "mean": 0.12716764568052594,
+      "sample_sd": 0.0056180046582422075,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.12949218469886553,
+        0.12076043907886459,
+        0.1312503132638477
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "id",
+      "unit": "L1",
+      "mean": 0.06885685948917158,
+      "sample_sd": 0.0021103400195475147,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.07118687232500977,
+        0.06707394115461243,
+        0.06830976498789257
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.33",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "L1",
+      "mean": 0.1442870756692089,
+      "sample_sd": 0.008658999861212211,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.14653839083043438,
+        0.13472477399096466,
+        0.15159806218622765
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "compositional-ood",
+      "unit": "L1",
+      "mean": 0.09565368003339479,
+      "sample_sd": 0.004489055049686973,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.09086982416564768,
+        0.09631712379997427,
+        0.09977409213456241
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "id",
+      "unit": "L1",
+      "mean": 0.06830276337265968,
+      "sample_sd": 0.0009130713298201679,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.0672918687856623,
+        0.06906757210088628,
+        0.06854884923143047
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "0.66",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "L1",
+      "mean": 0.11341009720220689,
+      "sample_sd": 0.0026232395121774527,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.1147166875433819,
+        0.11512344560396189,
+        0.11039015845927687
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "id",
+      "unit": "L1",
+      "mean": 0.07773150456664908,
+      "sample_sd": 0.001812263849713082,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.07970078523138649,
+        0.0773598491513831,
+        0.07613387931717766
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    },
+    {
+      "task": "image_editing",
+      "alpha": "1.00",
+      "model": "NEO",
+      "split": "length-ood",
+      "unit": "L1",
+      "mean": 0.11106118572865128,
+      "sample_sd": 0.0031059280475820676,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "scores": [
+        0.10784068344437073,
+        0.11403820781519473,
+        0.11130466592638841
+      ],
+      "source_commit": "26ea57db23a86e5fe0ea67f55614a63b005944d6",
+      "evaluation_source_commit": "ba20541d81d2c54ca73871e51fb26b2fbfcfbb6e"
+    }
+  ],
+  "hard_grounding": {
+    "gridworld": true,
+    "arithmetic_factorization": true,
+    "image_editing": false
+  }
+}

@@ -5,6 +5,8 @@ cosine temperature schedule.
 
 Derived from the VQ implementation in taming-transformers / MAGVIT via the
 paper-producing codebase (Apache-2.0, Bytedance Ltd.).
+Copyright (2024) Bytedance Ltd. and/or its affiliates.
+Includes modifications by the Learning to Theorize authors.
 """
 
 from __future__ import annotations

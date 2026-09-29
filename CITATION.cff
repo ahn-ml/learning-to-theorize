@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "Please cite Learning to Theorize the World from Observation."
+type: software
+title: Learning to Theorize the World from Observation
+authors:
+  - family-names: Baek
+    given-names: Doojin
+  - family-names: Lee
+    given-names: Gyubin
+  - family-names: Baek
+    given-names: Junyeob
+  - family-names: Lee
+    given-names: Hosung
+  - family-names: Ahn
+    given-names: Sungjin
+repository-code: https://github.com/ahn-ml/learning-to-theorize
+url: https://arxiv.org/abs/2605.03413
