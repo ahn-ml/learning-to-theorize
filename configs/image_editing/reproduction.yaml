@@ -1,0 +1,7 @@
+schema_version: 2
+task: image_editing
+pretraining:
+  profile: pretrained
+training:
+  preset: paper
+  devices: 2

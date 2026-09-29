@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "release": "reproduction-20260929",
+  "files": [
+    {
+      "path": "gridworld/observation/best_reconstruction/checkpoint_2941.pt",
+      "sha256": "f7ccf74bbed94a598e2971be02e1ddbbb67787e6baf54fe43731e4a2428e487f",
+      "bytes": 11592787
+    },
+    {
+      "path": "gridworld/observation/config.json",
+      "sha256": "5745c4294275398f7c3bc83cee7fd6236069cebd44b2d24968cb708062f99e62",
+      "bytes": 1106
+    },
+    {
+      "path": "gridworld/observation/status.json",
+      "sha256": "130c019c4fa4fc688e59d571222bfef2dba39a6445e8780ea8b380999bc12683",
+      "bytes": 126
+    },
+    {
+      "path": "gridworld/observation/metrics.jsonl",
+      "sha256": "10a196501e7c685d32bb631c70de34fc3f67f6986f159ceae03afe9f8fec6fbf",
+      "bytes": 159827
+    },
+    {
+      "path": "gridworld/observation/best_reconstruction.json",
+      "sha256": "bb0059bbf73dad19ea334b97aa1d8ef2b8edbdd517ba61da0756406762dfa2f0",
+      "bytes": 562
+    },
+    {
+      "path": "arithmetic_factorization/observation/model.pth",
+      "sha256": "0e68e07253b67783d1cd213902e159608e85088ea77379f085e4ac68c0e8047d",
+      "bytes": 797845
+    },
+    {
+      "path": "image_editing/observation/model.pth",
+      "sha256": "e2eb02bc4b71600303b54df8402c64b927b1e2ef346133db68fc40de6eb2814a",
+      "bytes": 198439691
+    }
+  ],
+  "archives": [
+    {
+      "name": "gridworld-observation.tar",
+      "sha256": "d6b43a77288ac80c871b4d47a44159122d8002f9ae6c88dd2d61e89db5a6ff57",
+      "bytes": 11776000
+    },
+    {
+      "name": "arithmetic_factorization-observation.tar",
+      "sha256": "ef2b021fa8183b212bc8f684e95e94d29261784f2c2b06a2c79655578f26a847",
+      "bytes": 808960
+    },
+    {
+      "name": "image_editing-observation.tar",
+      "sha256": "52330683e9e1e11b1d2b85c265966e3a72f063b866c3470328adc56955bf0068",
+      "bytes": 198451200
+    }
+  ],
+  "release_tag": "reproduction-20260929"
+}
