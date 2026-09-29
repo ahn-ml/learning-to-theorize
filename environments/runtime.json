@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "purpose": "Pinned shared runtime for the public training and evaluation workflow",
+  "release_environment": {
+    "file": "environments/README.md",
+    "name": "l2t"
+  },
+  "platform": {
+    "os": "Linux",
+    "architecture": "x86_64"
+  },
+  "runtime": {
+    "python": "3.10.18",
+    "pip": "23.0.1",
+    "torch": "2.7.1+cu126",
+    "torch_cuda": "12.6",
+    "cudnn": 90501,
+    "numpy": "2.0.1",
+    "numpy_blas": "openblas",
+    "h5py": "3.14.0",
+    "hdf5": "1.14.6",
+    "pyyaml": "6.0.3",
+    "lightning": "2.6.0",
+    "wandb": "0.25.1"
+  },
+  "determinism": {
+    "torch_deterministic_algorithms": true,
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "cublas_workspace_config": ":4096:8",
+    "note": "These settings are applied by the runner after process start."
+  }
+}
