@@ -203,28 +203,6 @@ class ArithmeticNEO(ArithmeticRollout):
         super().__init__(ArithmeticExperiment(training), module_parameters(training))
 
 
-class ArithmeticObservationModel(ArithmeticRollout):
-    """Digit autoencoder with cosine grounding during pretraining."""
-
-    def consistency_distance(self, current: Tensor, cleaned: Tensor) -> Tensor:
-        return 1 - torch.nn.functional.cosine_similarity(
-            current.flatten(1), cleaned.flatten(1), dim=-1
-        )
-
-    def __init__(self, parameters: DictConfig, *, config=None) -> None:
-        from tasks.arithmetic_factorization.observation_pretraining import (
-            ArithmeticObservationExperiment,
-            ArithmeticObservationPretrainingConfig,
-        )
-
-        super().__init__(
-            ArithmeticObservationExperiment(
-                config or ArithmeticObservationPretrainingConfig()
-            ),
-            parameters,
-        )
-
-
 def released_state_dict(state: Mapping[str, Tensor]) -> dict[str, Tensor]:
     """Rename a released checkpoint onto the integrated module names.
 
@@ -252,7 +230,6 @@ def build_neo(method: str, alpha: str) -> ArithmeticNEO:
 
 __all__ = [
     "ArithmeticNEO",
-    "ArithmeticObservationModel",
     "ArithmeticRollout",
     "build_released_modules",
     "build_neo",

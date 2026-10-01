@@ -34,8 +34,10 @@ directory together. Selection uses the earliest maximum of globally aggregated
 reconstruction accuracy.
 
 For Arithmetic, use `checkpoints/checkpoint_final.pth` after 500 epochs. This is
-a deterministic digit-embedding model with cosine pretraining and
-learned position embeddings; it is not a VAE. The minimum LR ratio is 0.005.
+a digit embedding and linear decoder trained only to reconstruct 10,000
+individual numbers (0000–9999). Pretraining has no program network, transition
+model, or VQ. The minimum LR ratio is 0.005. Reconstruction accuracy is measured
+on the same observation vocabulary; it is not task transfer accuracy.
 
 All three tasks can start from the provided observation checkpoints:
 
@@ -48,6 +50,10 @@ python scripts/download_checkpoints.py --task image_editing --output-root checkp
 Downloads are verified against `configs/checkpoints.json`. ImageEditing starts
 from its provided VAE; its observation-pretraining data and loop are not included.
 Only observation weights are distributed. Train NEO before evaluating it.
+
+The Arithmetic weights currently provided with the release were trained with
+the earlier pretraining procedure. They remain available for the recorded
+results; use the checkpoint from the command above for observation-only pretraining.
 
 ## NEO training
 

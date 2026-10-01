@@ -11,8 +11,9 @@ from tasks.gridworld.observation_checkpoint import _inspect_release_v1
 from tasks.gridworld.observation_pretraining import GridWorldObservationPretrainingConfig
 from tasks.gridworld.observation_runner import build_parser, _config_from_arguments
 from tasks.arithmetic_factorization.observation_pretraining import observation_pretraining_config
-from tasks.arithmetic_factorization.observation_runner import pretraining_parameters
-from tasks.arithmetic_factorization.task import ArithmeticObservationModel, build_neo
+from tasks.arithmetic_factorization.observation_runner import evaluate_reconstruction
+from tasks.arithmetic_factorization.observation import ArithmeticObservationModel
+from tasks.arithmetic_factorization.task import build_neo
 from tasks.arithmetic_factorization.theorizer_runner import load_observation_model
 from tasks.arithmetic_factorization.fabric_output import fabric_output_hook
 
@@ -62,25 +63,19 @@ def test_gridworld_profile_cli_and_handoff_are_explicit(profile, weight):
 
 def test_arithmetic_appendix_embeddings_train_and_transfer_under_fabric(tmp_path):
     config = observation_pretraining_config('appendix')
-    original = observation_pretraining_config()
     assert config.epochs == 500 and config.minimum_learning_rate_ratio == 0.005
-    assert replace(config, epochs=50, minimum_learning_rate_ratio=0.1) == original
-    params = pretraining_parameters(config, steps_per_epoch=5)
-    assert not params.use_vae and params.total_steps == 2500
-    core = ArithmeticObservationModel(params, config=config)
-    core.register_forward_hook(fabric_output_hook)
+    core = ArithmeticObservationModel(config)
     before = core.encoder.state_dict()['embedding_encoder.embedding.weight'].clone()
     fabric = Fabric(accelerator='cpu', devices=1, precision='bf16-mixed')
     optimizer = torch.optim.AdamW(core.parameters(), lr=config.learning_rate)
     model, optimizer = fabric.setup(core, optimizer)
-    data = torch.randint(0, 10, (2, 4, 1, 4))
-    from tasks.arithmetic_factorization.theorizer_runner import _evaluate
-    metrics = _evaluate(model, [(data[:, :3], data[:, 3], [])], fabric)
-    assert 0 <= metrics["transfer_accuracy"] <= 1
+    data = torch.randint(0, 10, (2, 1, 4))
+    metrics = evaluate_reconstruction(model, [data], fabric)
+    assert 0 <= metrics["number_accuracy"] <= 1
     model.train()
     result = model(data)
-    assert torch.isfinite(result.loss)
-    fabric.backward(result.loss)
+    assert torch.isfinite(result["loss"])
+    fabric.backward(result["loss"])
     optimizer.step()
     assert not torch.equal(before, core.encoder.state_dict()['embedding_encoder.embedding.weight'])
     path = tmp_path / 'observation.pth'

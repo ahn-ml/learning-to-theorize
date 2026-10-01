@@ -13,7 +13,7 @@ def test_runner_sets_distributed_sampler_seed(monkeypatch, tmp_path, stage, seed
     fabric_module = pytest.importorskip('lightning.fabric')
     real_fabric = fabric_module.Fabric
     from tasks.arithmetic_factorization import observation_runner, theorizer_runner
-    from tasks.arithmetic_factorization.data import dataset
+    from tasks.arithmetic_factorization.data import dataset, observations
     from training import runtime
 
     if inherited_seed is None:
@@ -54,8 +54,12 @@ def test_runner_sets_distributed_sampler_seed(monkeypatch, tmp_path, stage, seed
 
     monkeypatch.setattr(fabric_module, 'Fabric', InspectFabric)
     monkeypatch.setattr(dataset, 'build_dataloader', loader)
+    monkeypatch.setattr(observations, 'build_observation_loader', loader)
     argv = ['--train-h5', str(tmp_path/'train.h5'), '--test-h5', str(tmp_path/'test.h5'),
             '--output-root', str(tmp_path/'output')]
+    if stage == 'observation':
+        argv = ['--observations-h5', str(tmp_path/'observations.h5'),
+                '--output-root', str(tmp_path/'output')]
     if stage == 'theorizer':
         argv += ['--method', 'neo', '--alpha', '0.33', '--seed', str(seed),
                  '--observation-checkpoint', str(tmp_path/'observation.pt')]

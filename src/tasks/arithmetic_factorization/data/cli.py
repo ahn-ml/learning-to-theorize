@@ -141,10 +141,22 @@ def _generate_length_ood(output_dir: Path) -> None:
     )
 
 
+def generate_observation_data(output_dir: Path) -> int:
+    from tasks.arithmetic_factorization.data.observations import OBSERVATION_FILENAME, generate_observations
+
+    path = output_dir / OBSERVATION_FILENAME
+    if path.exists():
+        print(f"skipping observations: {path.name} already exists")
+    else:
+        generate_observations(path)
+    return 0
+
+
 def generate_all(output_dir: Path) -> int:
     """Generate every canonical profile, refusing to overwrite existing files."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    generate_observation_data(output_dir)
     for name in available_profiles():
         profile = get_profile(name)
         if (output_dir / profile.train.filename).exists():
@@ -192,13 +204,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Generate or verify arithmetic factorization artifacts."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("generate-all", "verify"):
+    for command in ("generate-all", "generate-observations", "verify"):
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--output-dir", type=Path, required=True)
     arguments = parser.parse_args(argv)
     output_dir = arguments.output_dir.expanduser().resolve()
     if arguments.command == "generate-all":
         return generate_all(output_dir)
+    if arguments.command == "generate-observations":
+        return generate_observation_data(output_dir)
     return verify(output_dir)
 
 
