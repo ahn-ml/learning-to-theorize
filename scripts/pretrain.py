@@ -25,9 +25,12 @@ def main() -> int:
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--devices", type=parse_devices, required=True)
+    parser.add_argument("--seed", type=int, help="Arithmetic pretraining seed (default: 42)")
     parser.add_argument("--dry-run", action="store_true")
     add_tracking_arguments(parser)
     arguments = parser.parse_args()
+    if arguments.seed is not None and arguments.task != "arithmetic_factorization":
+        parser.error("--seed is supported for Arithmetic pretraining")
     config = load_task_config(arguments.config, arguments.task)
     pretraining = config["pretraining"]
     if pretraining["profile"] == "pretrained":
@@ -35,16 +38,18 @@ def main() -> int:
     if len(arguments.devices.split(",")) != 4:
         parser.error("observation pretraining requires 4 devices")
     root = arguments.data_root.expanduser().resolve()
+    options = ["--pretraining-profile", pretraining["profile"],
+               "--output-root", arguments.output_root.expanduser().resolve(),
+               *tracking_argv(arguments)]
     if arguments.task == "gridworld":
         train = gridworld_artifact(root, "vae-pretraining", "practice")
         test = gridworld_artifact(root, "vae-pretraining", "exam")
+        options += ["--train-h5", train, "--test-h5", test]
     else:
-        from tasks.arithmetic_factorization.data.profiles import PRETRAINING_PROFILE
-        train, test = root / PRETRAINING_PROFILE.train.filename, root / PRETRAINING_PROFILE.test.filename
-    options = ["--pretraining-profile", pretraining["profile"],
-               "--train-h5", train, "--test-h5", test,
-               "--output-root", arguments.output_root.expanduser().resolve(),
-               *tracking_argv(arguments)]
+        from tasks.arithmetic_factorization.data.observations import OBSERVATION_FILENAME
+        options += ["--observations-h5", root / OBSERVATION_FILENAME]
+        if arguments.seed is not None:
+            options += ["--seed", arguments.seed]
     if "overrides" in pretraining:
         options += ["--pretraining-overrides", pretraining["overrides"]]
     command = module_command(f"tasks.{arguments.task}.observation_runner", *options, processes=4)

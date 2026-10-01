@@ -6,6 +6,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from tasks.arithmetic_factorization.validation import released_transfer_batch
+from tasks.arithmetic_factorization.latent_inference import latent_candidates
+from tasks.arithmetic_factorization.objective import ArithmeticObjective
 
 
 class Encoder(nn.Module):
@@ -15,7 +17,10 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def forward(self, x):
-        return F.one_hot(x.long().remainder(10), 10).float()
+        logits = 5 * F.one_hot(x.long().remainder(10), 10).float()
+        # Digit 9 is never predicted here, but its likelihood peaks at state 2.
+        logits[..., 9] += 4 * x.long().remainder(10).eq(2)
+        return logits
 
 
 class Programmer(nn.Module):
@@ -35,7 +40,9 @@ class Quantizer(nn.Module):
 
 def model():
     return SimpleNamespace(encoder=Encoder(), decoder=Decoder(), theory_programmer=Programmer(),
-                           program_executor=Executor(), quantizer=Quantizer())
+                           program_executor=Executor(), quantizer=Quantizer(),
+                           objective=ArithmeticObjective(), length_control_coefficient=1.0,
+                           training=False)
 
 
 @pytest.mark.parametrize('horizon',[3,6])
@@ -43,9 +50,13 @@ def test_batched_validation_matches_released_stopping_and_predictions(horizon):
     m=model()
     data=torch.tensor([[0,1,3,4],[0,2,3,5],[0,9,3,6]]).reshape(3,4,1,1)
     result=released_transfer_batch(m,data,max_steps=horizon)
-    assert result['selected_lengths'].tolist()==[1,2,horizon]
-    assert result['query_prediction'].flatten().tolist() == [4, 5, (3 + horizon) % 10]
-    assert result['query_solved'].tolist() == [True, True, horizon == 3]
+    assert result['selected_lengths'].tolist()==[1,2,2]
+    assert result['query_prediction'].flatten().tolist() == [4, 5, 5]
+    assert result['query_solved'].tolist() == [True, True, False]
+    for index, episode in enumerate(data):
+        reference=latent_candidates(m,episode,max_steps=horizon,greedy=True,hard_grounding=True)
+        assert result['selected_lengths'][index] == reference.lengths.item()
+        assert torch.equal(result['query_prediction'][index],reference.query_prediction[0])
     changed=data.clone();changed[:,3]=(changed[:,3]+2)%10
     again=released_transfer_batch(m,changed,max_steps=horizon)
     assert torch.equal(result['query_prediction'],again['query_prediction'])

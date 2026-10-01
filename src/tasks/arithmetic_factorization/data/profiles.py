@@ -123,17 +123,6 @@ _PROFILES: tuple[ArithmeticProfile, ...] = (
     ),
 )
 
-# The observation model is pretrained on single-step level-1 transitions.
-PRETRAINING_PROFILE = ArithmeticProfile(
-    name="paper-observation-pretraining",
-    alpha="1.00",
-    held_out_compositions=0,
-    train=ArtifactSpec("arith_lv1_10000_samples_train.h5", "", 10000),
-    test=ArtifactSpec("arith_lv1_1000_samples_test.h5", "", 1000),
-    length_ood=_LENGTH_OOD,
-)
-
-
 def available_profiles() -> tuple[str, ...]:
     """Return the canonical paper profile names in alpha order."""
 
@@ -164,7 +153,6 @@ __all__ = [
     "PAPER_LENGTH_OOD_LENGTHS",
     "PAPER_MULTIPLIERS",
     "PAPER_TRAIN_LENGTHS",
-    "PRETRAINING_PROFILE",
     "ArithmeticProfile",
     "ArtifactSpec",
     "SplitName",
