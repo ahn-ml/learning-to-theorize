@@ -9,7 +9,7 @@ from torch import Tensor
 def released_transfer_batch(model, data: Tensor, *, max_steps: int) -> dict[str, Tensor]:
     """Infer on support, re-encode each prediction, then replay the support program.
 
-    Uses the shortest exactly solved support prefix, otherwise all ``max_steps``.
+    Uses the shortest exactly solved support prefix, otherwise the support MDL minimum.
     Query targets only score the selected prediction. FP32 matches final evaluation;
     it deliberately differs from the latent recurrence used by the training loss.
     """
@@ -19,16 +19,19 @@ def released_transfer_batch(model, data: Tensor, *, max_steps: int) -> dict[str,
         support, target, query, answer = data.unbind(1)
         current, _ = model.encoder(support)
         goal, _ = model.encoder(target)
-        actions, predictions = [], []
-        for _ in range(max_steps):
+        actions, predictions, losses = [], [], []
+        for step in range(max_steps):
             action = model.theory_programmer(current, goal)
             action = model.quantizer(action, training_mode=False).values
             actions.append(action)
             current = model.program_executor(current, action)
-            prediction = model.decoder(current).argmax(-1)
+            logits = model.decoder(current)
+            prediction = logits.argmax(-1)
             predictions.append(prediction)
+            losses.append(model.objective.per_sample_reconstruction_loss(logits, target)
+                          * model.length_control_coefficient ** (step + 1))
             current, _ = model.encoder(prediction)
-        stops = torch.full((len(data),), max_steps - 1, device=data.device, dtype=torch.long)
+        stops = torch.stack(losses).argmin(0)
         for step in range(max_steps - 1, -1, -1):
             solved = predictions[step].eq(target).flatten(1).all(1)
             stops[solved] = step

@@ -8,7 +8,8 @@ from tasks.arithmetic_factorization.theorizer_scaling import SampledArithmeticTh
 
 
 @pytest.mark.parametrize('horizon', [3, 6])
-def test_greedy_matches_shared_neo_and_preserves_state(horizon):
+@pytest.mark.parametrize('hard_grounding', [False, True])
+def test_greedy_matches_shared_neo_and_preserves_state(horizon, hard_grounding):
     torch.manual_seed(12)
     model = build_neo('neo', '0.33').eval()
     data = torch.randint(0, 10, (4, 4, 1, 6))
@@ -16,15 +17,16 @@ def test_greedy_matches_shared_neo_and_preserves_state(horizon):
     rng = torch.get_rng_state()
     for episode in data:
         with torch.no_grad():
-            reference = model(episode.unsqueeze(0), is_eval=True, num_transitions=horizon)
-        result = latent_candidates(model, episode, max_steps=horizon, greedy=True, hard_grounding=False)
+            reference = model(episode.unsqueeze(0), is_eval=True, num_transitions=horizon,
+                              hard_grounding=hard_grounding)
+        result = latent_candidates(model, episode, max_steps=horizon, greedy=True, hard_grounding=hard_grounding)
         assert result.query_correct.item() == bool(reference.query_metrics.number_accuracy)
         assert result.support_correct.item() == bool(reference.metrics.number_accuracy)
         assert result.lengths.item() == reference.mean_explanation_length.item()
         assert torch.equal(result.support_prediction, reference.predictions.argmax(-1)[::2])
         assert torch.equal(result.query_prediction, reference.predictions.argmax(-1)[1::2])
         changed = episode.clone(); changed[3] = (changed[3] + 1) % 10
-        again = latent_candidates(model, changed, max_steps=horizon, greedy=True, hard_grounding=False)
+        again = latent_candidates(model, changed, max_steps=horizon, greedy=True, hard_grounding=hard_grounding)
         assert torch.equal(result.indices, again.indices)
         assert torch.equal(result.lengths, again.lengths)
         assert torch.equal(result.query_prediction, again.query_prediction)
