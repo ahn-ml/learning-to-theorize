@@ -23,7 +23,7 @@ learning rate 0.0025 and KL weight 1e-5. Arithmetic uses four GPUs and 500 epoch
 ```bash
 python scripts/pretrain.py --task gridworld --devices 0,1,2,3 \
   --data-root /path/to/gridworld-data --output-root /path/to/new-grid-pretraining
-python scripts/pretrain.py --task arithmetic_factorization --devices 0,1,2,3 \
+python scripts/pretrain.py --task arithmetic_factorization --devices 0,1,2,3 --seed 44 \
   --data-root /path/to/arithmetic-data --output-root /path/to/new-arithmetic-pretraining
 ```
 
@@ -33,13 +33,15 @@ by `best_reconstruction.json` to NEO. Keep `config.json`, `status.json`,
 directory together. Selection uses the earliest maximum of globally aggregated
 reconstruction accuracy.
 
-For Arithmetic, use `checkpoints/checkpoint_final.pth` after 500 epochs. This is
+For Arithmetic, finish all 500 epochs and use the checkpoint named in
+`best_reconstruction.json`. Selection uses the earliest saved maximum of number
+reconstruction accuracy; the final checkpoint is also retained. This is
 a digit embedding and linear decoder trained only to reconstruct 10,000
 individual numbers (0000–9999). Pretraining has no program network, transition
 model, or VQ. The minimum LR ratio is 0.005. Reconstruction accuracy is measured
 on the same observation vocabulary; it is not task transfer accuracy.
-Use `--seed 43` or `--seed 44` to repeat Arithmetic pretraining independently;
-the default is 42.
+The example uses one shared observation checkpoint from seed 44 for all downstream
+seeds. Use `--seed` to repeat Arithmetic pretraining independently; the CLI default is 42.
 
 All three tasks can start from the provided observation checkpoints:
 

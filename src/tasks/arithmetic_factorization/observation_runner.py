@@ -17,6 +17,34 @@ from training.optimization import OptimizationConfig, build_cosine_warmup_schedu
 RUN_NAME = "arithmetic-observation-pretraining"
 
 
+def select_reconstruction_checkpoint(run_directory: Path, final_step: int) -> dict:
+    """Select the earliest saved maximum of number reconstruction accuracy."""
+    from training.runtime import sha256_file
+
+    candidates = []
+    for line in (run_directory / "metrics.jsonl").read_text().splitlines():
+        metrics = json.loads(line)
+        if "reconstruction/number_accuracy" not in metrics:
+            continue
+        step = metrics["global_step"]
+        checkpoint = run_directory / "checkpoints" / f"checkpoint_{step}.pth"
+        if not checkpoint.is_file() and step == final_step:
+            checkpoint = run_directory / "checkpoints" / "checkpoint_final.pth"
+        if checkpoint.is_file():
+            candidates.append((metrics["reconstruction/number_accuracy"], step,
+                               metrics["completed_epochs"], checkpoint))
+    if not candidates:
+        raise ValueError("no saved reconstruction checkpoints")
+    score, step, epoch, checkpoint = max(candidates, key=lambda item: (item[0], -item[1]))
+    return {
+        "checkpoint": str(checkpoint.relative_to(run_directory)),
+        "checkpoint_sha256": sha256_file(checkpoint),
+        "metric": "number_accuracy", "score": score,
+        "global_step": step, "completed_epochs": epoch,
+        "tie_break": "earliest_step",
+    }
+
+
 @torch.no_grad()
 def evaluate_reconstruction(model, loader, fabric) -> dict[str, float]:
     """Measure reconstruction on the observation vocabulary, not task transfer."""
@@ -154,10 +182,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         final_metrics = evaluate_reconstruction(model, reconstruction_loader, fabric)
         final_checkpoint = save_checkpoint("checkpoint_final.pth", config.epochs, global_step)
         if fabric.global_rank == 0:
+            metric_log.log({"completed_epochs": config.epochs, "global_step": global_step,
+                            **{f"reconstruction/{key}": value for key, value in final_metrics.items()}})
+            selected = select_reconstruction_checkpoint(run_directory, global_step)
+            (run_directory / "best_reconstruction.json").write_text(json.dumps(selected, indent=2) + "\n")
             (run_directory / "status.json").write_text(json.dumps({
                 "status": "completed", "completed_epochs": config.epochs,
                 "global_step": global_step, "expected_steps": total_steps,
                 "final_checkpoint": str(final_checkpoint), "reconstruction": final_metrics,
+                "best_checkpoint": str(run_directory / selected["checkpoint"]),
             }))
         fabric.barrier()
     except Exception:

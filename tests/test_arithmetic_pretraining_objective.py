@@ -1,4 +1,6 @@
 """Observation pretraining cannot use transitions or paired targets."""
+import json
+
 import h5py
 import pytest
 import torch
@@ -7,6 +9,7 @@ from torch.nn import functional as F
 from tasks.arithmetic_factorization.data.observations import generate_observations, build_observation_loader
 from tasks.arithmetic_factorization.observation_pretraining import observation_pretraining_config
 from tasks.arithmetic_factorization.observation import ArithmeticObservationModel
+from tasks.arithmetic_factorization.observation_runner import select_reconstruction_checkpoint
 
 
 def test_pretraining_is_only_digit_reconstruction():
@@ -45,3 +48,32 @@ def test_paired_artifact_is_not_accepted_for_pretraining(tmp_path):
         file.create_group("sample_0")
     with pytest.raises(KeyError):
         build_observation_loader(path, batch_size=8, shuffle=True, seed=42)
+
+
+def test_reconstruction_selection_keeps_first_accuracy_maximum(tmp_path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    records = []
+    for step, accuracy, loss in ((0, 0.1, 2.0), (25, 0.7, 1.2), (50, 1.0, 0.8), (75, 1.0, 0.01)):
+        if step:
+            torch.save({"step": step}, checkpoints / f"checkpoint_{step}.pth")
+        records.append({"global_step": step, "completed_epochs": step // 5,
+                        "reconstruction/number_accuracy": accuracy, "reconstruction/loss": loss})
+    (tmp_path / "metrics.jsonl").write_text("\n".join(json.dumps(row) for row in records))
+    selected = select_reconstruction_checkpoint(tmp_path, 75)
+    assert selected["checkpoint"] == "checkpoints/checkpoint_50.pth"
+    assert selected["score"] == 1.0 and selected["global_step"] == 50
+    assert torch.load(tmp_path / selected["checkpoint"], weights_only=True)["step"] == 50
+
+
+def test_final_reconstruction_checkpoint_can_win_between_save_intervals(tmp_path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    torch.save({"step": 25}, checkpoints / "checkpoint_25.pth")
+    torch.save({"step": 30}, checkpoints / "checkpoint_final.pth")
+    records = [{"global_step": step, "completed_epochs": step // 5,
+                "reconstruction/number_accuracy": accuracy} for step, accuracy in ((25, 0.9), (30, 1.0))]
+    (tmp_path / "metrics.jsonl").write_text("\n".join(json.dumps(row) for row in records))
+    selected = select_reconstruction_checkpoint(tmp_path, 30)
+    assert selected["checkpoint"] == "checkpoints/checkpoint_final.pth"
+    assert selected["score"] == 1.0 and selected["completed_epochs"] == 6
