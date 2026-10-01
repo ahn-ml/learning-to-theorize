@@ -38,6 +38,8 @@ a digit embedding and linear decoder trained only to reconstruct 10,000
 individual numbers (0000–9999). Pretraining has no program network, transition
 model, or VQ. The minimum LR ratio is 0.005. Reconstruction accuracy is measured
 on the same observation vocabulary; it is not task transfer accuracy.
+Use `--seed 43` or `--seed 44` to repeat Arithmetic pretraining independently;
+the default is 42.
 
 All three tasks can start from the provided observation checkpoints:
 

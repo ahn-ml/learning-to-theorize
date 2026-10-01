@@ -52,6 +52,15 @@ def test_default_pretraining_uses_actual_appendix_runner(task):
         assert json.loads(config.read_text()) == {'epochs': 50, 'kl_weight': 1e-5, 'learning_rate': .0025}
 
 
+@pytest.mark.parametrize('seed', [43, 44])
+def test_arithmetic_pretraining_seed_reaches_runner(seed):
+    result = command('pretrain.py', 'arithmetic_factorization', '--devices', '4,5,6,7',
+                     '--seed', str(seed))
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(result.stdout)['commands'][0]['argv']
+    assert argv[argv.index('--seed') + 1] == str(seed)
+
+
 def test_custom_pretraining_file_is_forwarded_not_silently_ignored(tmp_path):
     config = tmp_path / 'recipe.yaml'
     original = (ROOT / 'configs/gridworld/reproduction.yaml').read_text()

@@ -41,6 +41,7 @@ def evaluate_reconstruction(model, loader, fabric) -> dict[str, float]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pretraining-profile", choices=("appendix",), default="appendix")
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--observations-h5", required=True, type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--wandb-project", default="LearningToTheorize")
@@ -55,7 +56,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from tasks.arithmetic_factorization.observation import ArithmeticObservationModel
     from training.runtime import ExperimentTrackingConfig, MetricLog, capture_git_source, seed_everything, sha256_file
 
-    config = observation_pretraining_config(arguments.pretraining_profile)
+    config = observation_pretraining_config(arguments.pretraining_profile, seed=arguments.seed)
     source = capture_git_source(Path(__file__).resolve().parent)
     fabric = Fabric(
         accelerator="auto", devices=config.effective_world_size, precision="bf16-mixed",

@@ -24,7 +24,7 @@ class ArithmeticObservationPretrainingConfig:
 TRANSFERRED_PREFIXES: tuple[str, ...] = ("encoder.", "decoder.")
 
 
-def observation_pretraining_config(profile: str = "appendix") -> ArithmeticObservationPretrainingConfig:
+def observation_pretraining_config(profile: str = "appendix", *, seed: int = 42) -> ArithmeticObservationPretrainingConfig:
     if profile != "appendix":
         raise ValueError("unknown pretraining profile")
-    return ArithmeticObservationPretrainingConfig()
+    return ArithmeticObservationPretrainingConfig(seed=seed)
