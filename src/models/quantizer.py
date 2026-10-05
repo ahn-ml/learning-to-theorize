@@ -21,35 +21,27 @@ class ActionQuantizerOutput:
     loss_per_sample: Tensor
     commitment_loss: Tensor
     codebook_loss: Tensor
-    entropy_loss: Tensor
-    sample_entropy: Tensor
-    codebook_entropy: Tensor
     temperature: Tensor
     indices: Tensor
     logits: Tensor
+    # Set only by the Arithmetic adapter.
     orthogonal_loss: Tensor | None = None
+    entropy_loss: Tensor | None = None
+    sample_entropy: Tensor | None = None
+    codebook_entropy: Tensor | None = None
 
 
 class ActionQuantizer(nn.Module):
     """Six-code stochastic vector quantizer used by every alpha setting."""
 
-    def __init__(
-        self,
-        config: LatentProgramConfig,
-        *,
-        entropy_loss_weight: float = 0.0,
-        entropy_temperature: float = 1.0,
-    ) -> None:
+    def __init__(self, config: LatentProgramConfig) -> None:
         super().__init__()
         self.config = config
         self.commitment_cost = self.config.action_commitment_weight
-        self.stochastic = self.config.stochastic_action_vq
         self.current_step = 0
         self.tau_start = self.config.action_tau_start
         self.tau_end = self.config.action_tau_end
         self.tau_steps = self.config.action_tau_steps
-        self.entropy_loss_weight = entropy_loss_weight
-        self.entropy_temperature = entropy_temperature
 
         self.embedding = nn.Embedding(
             self.config.action_codebook_size,
@@ -97,19 +89,14 @@ class ActionQuantizer(nn.Module):
             )
 
             current_temperature = self.get_temperature()
-            if self.stochastic:
-                if training_mode:
-                    logits = -distances / current_temperature
-                    probabilities = F.softmax(logits, dim=-1)
-                    indices = torch.multinomial(probabilities, 1).squeeze(-1)
-                else:
-                    logits = -distances
-                    probabilities = F.softmax(logits, dim=-1)
-                    indices = probabilities.argmax(dim=-1)
+            if training_mode:
+                logits = -distances / current_temperature
+                probabilities = F.softmax(logits, dim=-1)
+                indices = torch.multinomial(probabilities, 1).squeeze(-1)
             else:
-                current_temperature = 0.0
-                logits = distances.reciprocal()
-                indices = distances.argmin(dim=-1)
+                logits = -distances
+                probabilities = F.softmax(logits, dim=-1)
+                indices = probabilities.argmax(dim=-1)
 
             quantized = self.get_codebook_entry(indices).view(actions.shape)
             quantized = F.normalize(quantized, dim=-1)
@@ -127,35 +114,8 @@ class ActionQuantizer(nn.Module):
                 quantized - normalized_actions.detach()
             ).square().mean(dim=(1, 2))
 
-            if self.entropy_loss_weight:
-                entropy, sample_entropy, codebook_entropy = self._entropy_loss(
-                    -distances,
-                    self.entropy_temperature,
-                )
-                entropy_loss = self.entropy_loss_weight * entropy
-            else:
-                entropy_loss = torch.tensor(
-                    0.0,
-                    device=actions.device,
-                    dtype=actions.dtype,
-                )
-                sample_entropy = torch.tensor(
-                    0.0,
-                    device=actions.device,
-                    dtype=actions.dtype,
-                )
-                codebook_entropy = torch.tensor(
-                    0.0,
-                    device=actions.device,
-                    dtype=actions.dtype,
-                )
-
-            loss = commitment_loss + codebook_loss + entropy_loss
-            loss_per_sample = (
-                commitment_loss_per_sample
-                + codebook_loss_per_sample
-                + entropy_loss
-            )
+            loss = commitment_loss + codebook_loss
+            loss_per_sample = commitment_loss_per_sample + codebook_loss_per_sample
             straight_through = normalized_actions + (
                 quantized - normalized_actions
             ).detach()
@@ -166,9 +126,6 @@ class ActionQuantizer(nn.Module):
             loss_per_sample=loss_per_sample,
             commitment_loss=commitment_loss,
             codebook_loss=codebook_loss,
-            entropy_loss=entropy_loss,
-            sample_entropy=sample_entropy,
-            codebook_entropy=codebook_entropy,
             temperature=torch.tensor(current_temperature),
             indices=indices,
             logits=logits,
@@ -178,23 +135,6 @@ class ActionQuantizer(nn.Module):
         if indices.ndim != 1:
             raise ValueError("indices must be a rank-one tensor")
         return F.normalize(self.embedding(indices), dim=-1)
-
-    @staticmethod
-    def _entropy_loss(
-        affinity: Tensor,
-        temperature: float,
-    ) -> tuple[Tensor, Tensor, Tensor]:
-        scaled = affinity.view(-1, affinity.shape[-1]) / temperature
-        probabilities = F.softmax(scaled, dim=-1)
-        log_probabilities = F.log_softmax(scaled + 1e-5, dim=-1)
-        average_probabilities = probabilities.mean(dim=0)
-        codebook_entropy = -torch.sum(
-            average_probabilities * torch.log(average_probabilities + 1e-5)
-        )
-        sample_entropy = -torch.mean(
-            torch.sum(probabilities * log_probabilities, dim=-1)
-        )
-        return codebook_entropy, sample_entropy, codebook_entropy
 
 
 __all__ = [

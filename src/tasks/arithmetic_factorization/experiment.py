@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
-
-ArithmeticMethod = Literal["neo"]
 
 ARITHMETIC_SEEDS: tuple[int, ...] = (42, 43, 44)
 ARITHMETIC_ALPHAS: tuple[str, ...] = ("0.33", "0.66", "1.00")
@@ -23,7 +20,6 @@ class TheoryProgrammerConfig:
     num_heads: int = 4
     num_layers: int = 6
     dropout: float = 0.0
-    sinusoidal_state_positions: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,26 +31,25 @@ class ProgramExecutorConfig:
     num_heads: int = 2
     num_layers: int = 4
     dropout: float = 0.0
-    residual: bool = False
-    sinusoidal_state_positions: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class ActionQuantizerConfig:
-    """Discrete operation bottleneck for NEO."""
+    """Discrete operation bottleneck for NEO.
+
+    Training samples codes from softmax(-distance / tau), with tau annealed
+    from ``tau_start`` to ``tau_end`` over the first ``scheduling_ratio`` of
+    optimizer steps; evaluation uses the nearest code. The EMA codebook is
+    updated in every quantizer call from that call's assignments, so later
+    rollout steps see it.
+    """
 
     commitment_weight: float = 0.25
     use_exponential_moving_average: bool = True
     exponential_moving_average_decay: float = 0.99
-    stochastic: bool = False
     tau_start: float = 0.3
     tau_end: float = 0.05
     scheduling_ratio: float = 0.25
-    entropy_loss_weight: float = 0.0
-    entropy_temperature: float = 1.0
-    orthogonal_regularization_weight: float = 10.0
-    orthogonal_regularization_max_codes: int = 16
-    diversity_loss_weight: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,7 +82,6 @@ class OptimizationSettings:
 class ArithmeticTrainingConfig:
     """Executable contract for one arithmetic factorization training run."""
 
-    method: ArithmeticMethod
     alpha: str
     total_steps: int
     max_transition_length: int
@@ -99,15 +93,10 @@ class ArithmeticTrainingConfig:
     action_dim: int = 4
     num_state_tokens: int = 6
     num_action_tokens: int = 1
-    num_train_pairs: int = 1
 
     length_control_coefficient: float = 1.01
     length_control_coefficient_end: float = 0.99
     length_control_scheduling_ratio: float = 0.1
-
-    freeze_observation_model: bool = True
-    use_one_codebook: bool = True
-    deterministic_observation_model: bool = True
 
     theory_programmer: TheoryProgrammerConfig = field(
         default_factory=TheoryProgrammerConfig
@@ -134,8 +123,7 @@ class ArithmeticTrainingConfig:
         return int(self.total_steps * self.quantizer.scheduling_ratio)
 
     # The shared rollout reads the objective weights and freeze flags under
-    # these names. They are views onto the grouped fields above, so the
-    # serialized contract in configs/ stays unchanged.
+    # these names. The pretrained observation model is always frozen.
 
     @property
     def reconstruction_weight(self) -> float:
@@ -157,11 +145,11 @@ class ArithmeticTrainingConfig:
 
     @property
     def freeze_observation_encoder(self) -> bool:
-        return self.freeze_observation_model
+        return True
 
     @property
     def freeze_observation_decoder(self) -> bool:
-        return self.freeze_observation_model
+        return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,29 +163,18 @@ class ArithmeticExperiment:
         return self.training.length_control_coefficient
 
 
-available_methods: tuple[ArithmeticMethod, ...] = ("neo",)
+def get_experiment(method: str, alpha: str) -> ArithmeticTrainingConfig:
+    """Resolve the NEO training contract for one alpha setting."""
 
-
-def trainable_method(method: str) -> ArithmeticMethod:
-    """Validate the supported training method."""
     if method != "neo":
         raise ValueError(f"unknown arithmetic method: {method!r}")
-    return "neo"
-
-
-def get_experiment(method: str, alpha: str) -> ArithmeticTrainingConfig:
-    """Resolve the frozen paper contract for one method and alpha setting."""
-
-    resolved = trainable_method(method)
     if alpha not in ARITHMETIC_ALPHAS:
         raise ValueError(f"unknown arithmetic alpha: {alpha!r}")
     return ArithmeticTrainingConfig(
-        method=resolved,
         alpha=alpha,
         total_steps=_ALPHA_TOTAL_STEPS[alpha],
         max_transition_length=3,
         action_codebook_size=16,
-        quantizer=ActionQuantizerConfig(stochastic=True),
     )
 
 
@@ -206,13 +183,10 @@ __all__ = [
     "ARITHMETIC_SEEDS",
     "ActionQuantizerConfig",
     "ArithmeticExperiment",
-    "ArithmeticMethod",
     "ArithmeticTrainingConfig",
     "LossWeights",
     "OptimizationSettings",
     "ProgramExecutorConfig",
     "TheoryProgrammerConfig",
-    "available_methods",
     "get_experiment",
-    "trainable_method",
 ]

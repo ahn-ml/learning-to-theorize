@@ -1,4 +1,4 @@
-"""Train one ImageEditing method, alpha and seed with two GPU ranks.
+"""Train ImageEditing NEO for one alpha and seed with two GPU ranks.
 
 Each rank uses batch size 64. The programmer and executor learning rates are
 0.25x and 0.5x the base rate, and the MDL coefficient follows a per-step linear
@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
@@ -32,7 +31,6 @@ from tasks.image_editing.experiment_config import (
     Experiment,
     PAPER_ALPHAS,
     PAPER_SEEDS,
-    TRAINED_METHODS,
     get_experiment,
 )
 from tasks.image_editing.task import build_neo
@@ -62,31 +60,24 @@ LOG_INTERVAL_STEPS = 50
 class TheorizerRunConfig:
     """One resolved training invocation."""
 
-    method: str
     alpha: str
     seed: int
     train_h5: Path
     test_h5: Path
     observation_checkpoint: Path
     output_root: Path
-    device: str
-    epochs: int | None = None
-    batch_size: int | None = None
-    num_workers: int | None = None
-    max_steps: int | None = None
-    test_batches: int | None = None
     wandb_project: str = "LearningToTheorize"
     wandb_entity: str | None = None
     wandb_group: str | None = None
-    wandb_mode: str = "disabled"
+    wandb_mode: str = "online"
 
     @property
     def experiment(self) -> Experiment:
-        return get_experiment(self.method, self.alpha)
+        return get_experiment(self.alpha)
 
     @property
     def run_name(self) -> str:
-        return f"image-editing-{self.method}-alpha{self.alpha}-seed{self.seed}"
+        return f"image-editing-neo-alpha{self.alpha}-seed{self.seed}"
 
 
 def load_observation_checkpoint(model: nn.Module, path: Path) -> int:
@@ -102,7 +93,6 @@ def load_observation_checkpoint(model: nn.Module, path: Path) -> int:
     if not observation:
         raise ValueError(f"no encoder/decoder tensors found in {path}")
     missing, unexpected = model.load_state_dict(observation, strict=False)
-    unexpected = [k for k in unexpected]
     if unexpected:
         raise ValueError(f"observation checkpoint has unexpected keys: {unexpected[:5]}")
     still_missing = [
@@ -190,16 +180,10 @@ def _forward(
     batch: EpisodeBatch,
     *,
     is_eval: bool,
-    coefficient: float | None,
-    precision: str = "bf16-mixed",
+    coefficient: float,
 ):
-    # The contract's precision; the quantizer opts out of autocast internally.
-    autocast = (
-        bfloat16_autocast(batch.grids.device)
-        if precision == "bf16-mixed"
-        else nullcontext()
-    )
-    with autocast:
+    # bf16 mixed precision on CUDA; the quantizer opts out of autocast internally.
+    with bfloat16_autocast(batch.grids.device):
         return model(
             batch.grids,
             is_eval=is_eval,
@@ -213,31 +197,21 @@ def evaluate(
     loader: DataLoader,
     device: torch.device,
     *,
-    coefficient: float | None,
-    precision: str = "bf16-mixed",
-    max_batches: int | None = None,
+    coefficient: float,
 ) -> dict[str, float]:
     model.eval()
-    sums = dict.fromkeys(("support_l1", "query_l1", "query_reconstruction_loss"), 0.0)
-    sums["mean_explanation_length"] = 0.0
+    sums = dict.fromkeys(
+        ("support_l1", "query_l1", "query_reconstruction_loss", "mean_explanation_length"), 0.0
+    )
     count = 0
-    for index, batch in enumerate(loader):
-        if max_batches is not None and index >= max_batches:
-            break
-        output = _forward(
-            model,
-            batch.to(device),
-            is_eval=True,
-            coefficient=coefficient,
-            precision=precision,
-        )
+    for batch in loader:
+        output = _forward(model, batch.to(device), is_eval=True, coefficient=coefficient)
         record = {
             "support_l1": float(output.metrics.l1),
             "query_l1": float(output.query_metrics.l1),
             "query_reconstruction_loss": float(output.query_reconstruction_loss),
+            "mean_explanation_length": float(output.mean_explanation_length),
         }
-        if hasattr(output, "mean_explanation_length"):
-            record["mean_explanation_length"] = float(output.mean_explanation_length)
         for key, value in record.items():
             sums[key] += value * len(batch)
         count += len(batch)
@@ -254,7 +228,7 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
 
     experiment = config.experiment
     training = experiment.training
-    context = initialize_distributed(force_cpu=config.device == "cpu")
+    context = initialize_distributed()
     if context.world_size != training.world_size:
         raise ValueError(
             f"this condition trained on {training.world_size} ranks with a "
@@ -280,11 +254,9 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
             find_unused_parameters=True,
         )
 
-    epochs = config.epochs or training.epochs
-    batch_size = config.batch_size or training.batch_size
-    num_workers = (
-        training.num_workers if config.num_workers is None else config.num_workers
-    )
+    epochs = training.epochs
+    batch_size = training.batch_size
+    num_workers = training.num_workers
 
     train_dataset = ImageEditingDataset(config.train_h5)
     test_dataset = ImageEditingDataset(config.test_h5)
@@ -305,17 +277,7 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
         context=context,
     )
 
-    steps_per_epoch = len(train_loader)
-    total_steps = (
-        config.max_steps
-        if config.max_steps is not None
-        else epochs * steps_per_epoch
-    )
-    if training.lr_scheduler != "cosine_annealing":
-        raise ValueError(
-            f"the released runs used cosine_annealing; the contract asks for "
-            f"{training.lr_scheduler!r}, which this runner does not implement"
-        )
+    total_steps = epochs * len(train_loader)
     optimization = OptimizationConfig(
         total_steps=total_steps,
         learning_rate=training.learning_rate,
@@ -337,7 +299,7 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
         (run_directory / "checkpoints").mkdir(exist_ok=True)
     resolved = {
         "task": "image_editing",
-        "method": config.method,
+        "method": "neo",
         "alpha": config.alpha,
         "seed": config.seed,
         "total_steps": total_steps,
@@ -362,7 +324,7 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
             resolved,
         )
 
-    def coefficient_at(step: int) -> float | None:
+    def coefficient_at(step: int) -> float:
         return experiment.scheduled_length_control(step / max(total_steps, 1))
 
     exit_code = 1
@@ -373,20 +335,12 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
             if train_sampler is not None:
                 train_sampler.set_epoch(epoch)
             for batch in train_loader:
-                if global_step >= total_steps:
-                    break
                 moved = batch.to(device)
                 coefficient = coefficient_at(global_step)
                 step_result = optimization_step(
                     model,
                     moved,
-                    lambda m, b: _forward(
-                        m,
-                        b,
-                        is_eval=False,
-                        coefficient=coefficient,
-                        precision=training.precision,
-                    ),
+                    lambda m, b: _forward(m, b, is_eval=False, coefficient=coefficient),
                     optimizer,
                     scheduler,
                     global_step=global_step,
@@ -407,11 +361,7 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
                             ),
                             "train/gradient_norm": float(step_result.gradient_norm),
                             "train/learning_rate": step_result.learning_rates[-1],
-                            **(
-                                {"train/length_control_coefficient": coefficient}
-                                if coefficient is not None
-                                else {}
-                            ),
+                            "train/length_control_coefficient": coefficient,
                         }
                     )
             evaluation = evaluate(
@@ -419,8 +369,6 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
                 test_loader,
                 device,
                 coefficient=coefficient_at(global_step),
-                precision=training.precision,
-                max_batches=config.test_batches,
             )
             if log is not None:
                 log.log(
@@ -444,8 +392,6 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
                     },
                     run_directory / "checkpoints" / f"checkpoint_{global_step}.pt",
                 )
-            if global_step >= total_steps:
-                break
         if context.is_global_zero:
             (run_directory / "result.json").write_text(
             json.dumps(
@@ -470,47 +416,26 @@ def run_theorizer(config: TheorizerRunConfig) -> Path:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=TRAINED_METHODS, required=True)
     parser.add_argument("--alpha", choices=PAPER_ALPHAS, required=True)
     parser.add_argument("--seed", type=int, required=True, choices=PAPER_SEEDS)
     parser.add_argument("--train-h5", type=Path, required=True)
     parser.add_argument("--test-h5", type=Path, required=True)
     parser.add_argument("--observation-checkpoint", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument(
-        "--device",
-        default="cuda",
-        help="cuda (default) or cpu; the topology comes from torchrun",
-    )
     parser.add_argument("--wandb-project", default="LearningToTheorize")
     parser.add_argument("--wandb-entity")
     parser.add_argument("--wandb-group")
-    parser.add_argument(
-        "--wandb-mode", choices=("online", "offline", "disabled"), default="online"
-    )
-    development = parser.add_argument_group("development")
-    development.add_argument("--development-epochs", type=int)
-    development.add_argument("--development-batch-size", type=int)
-    development.add_argument("--development-num-workers", type=int)
-    development.add_argument("--development-max-steps", type=int)
-    development.add_argument("--development-test-batches", type=int)
+    parser.add_argument("--wandb-mode", choices=("online", "offline"), default="online")
     arguments = parser.parse_args(argv)
 
     run_directory = run_theorizer(
         TheorizerRunConfig(
-            method=arguments.method,
             alpha=arguments.alpha,
             seed=arguments.seed,
             train_h5=arguments.train_h5,
             test_h5=arguments.test_h5,
             observation_checkpoint=arguments.observation_checkpoint,
             output_root=arguments.output_root,
-            device=arguments.device,
-            epochs=arguments.development_epochs,
-            batch_size=arguments.development_batch_size,
-            num_workers=arguments.development_num_workers,
-            max_steps=arguments.development_max_steps,
-            test_batches=arguments.development_test_batches,
             wandb_project=arguments.wandb_project,
             wandb_entity=arguments.wandb_entity,
             wandb_group=arguments.wandb_group,

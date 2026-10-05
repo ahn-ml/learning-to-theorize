@@ -104,7 +104,7 @@ def test_gridworld_sampling_grounding_switch_and_default_parity():
 
 def test_image_uses_existing_8bit_projection_for_hard_grounding():
     from tasks.image_editing.task import build_neo as image_model
-    torch.manual_seed(12);model=image_model(('neo','0.33')).eval()
+    torch.manual_seed(12);model=image_model('0.33').eval()
     data=torch.randint(0,256,(1,4,32,32,3),dtype=torch.uint8)
     states=[];inputs=[]
     h1=model.program_executor.register_forward_hook(lambda m,a,y:states.append(y.detach().clone()))

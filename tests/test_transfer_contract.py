@@ -39,8 +39,7 @@ class Quantizer(nn.Module):
         zero = actions.new_zeros(())
         return ActionQuantizerOutput(
             values=actions, loss=zero, loss_per_sample=actions.new_zeros(actions.shape[0]),
-            commitment_loss=zero, codebook_loss=zero, entropy_loss=zero,
-            sample_entropy=zero, codebook_entropy=zero, temperature=zero,
+            commitment_loss=zero, codebook_loss=zero, temperature=zero,
             indices=torch.zeros(actions.shape[0], dtype=torch.long),
             logits=actions.new_zeros(actions.shape[0], 1))
 

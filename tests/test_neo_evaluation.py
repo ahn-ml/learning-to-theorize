@@ -93,15 +93,11 @@ def test_final_evaluation_rejects_different_selection_grounding(domain, groundin
             tracking={}, source={})
 
 
-@pytest.mark.parametrize("source_state", ["pushed", "local", "archive"])
-def test_main_freezes_selection_before_resolving_ood(monkeypatch, tmp_path, source_state):
+@pytest.mark.parametrize("commit,clean", [("test", True), ("test", False), (None, False)])
+def test_main_freezes_selection_before_resolving_ood(monkeypatch, tmp_path, commit, clean):
     stages = []
     from training.runtime import GitSourceState
-    source = evaluation_source() if source_state == "pushed" else GitSourceState(
-        None, None, None, None, False, False, None
-    ) if source_state == "archive" else GitSourceState(
-        '/source', 'test', 'local', None, False, False, 'working-tree-fingerprint'
-    )
+    source = GitSourceState(commit=commit, clean=clean)
     monkeypatch.setattr(evaluation, 'capture_git_source', lambda _: source)
     def data_path(domain, alpha, split, root):
         assert split == 'id'
@@ -119,13 +115,8 @@ def test_main_freezes_selection_before_resolving_ood(monkeypatch, tmp_path, sour
     monkeypatch.setattr(evaluation, 'evaluate_selected', evaluate)
     assert evaluation.main(['--task', 'gridworld', '--alpha', '0.33', '--seed', '42',
         '--data-root', str(tmp_path), '--checkpoint-directory', str(tmp_path),
-        '--output-root', str(tmp_path / 'out'), '--device', 'cpu']) == 0
+        '--output-root', str(tmp_path / 'out')]) == 0
     assert stages == ['id', 'selection_complete', 'final']
-
-
-def evaluation_source():
-    from training.runtime import GitSourceState
-    return GitSourceState('/source', 'test', 'main', 'https://example.test/repo', True, True, None)
 
 
 def test_public_script_routes_neo_to_id_selection(monkeypatch, tmp_path):
@@ -134,15 +125,18 @@ def test_public_script_routes_neo_to_id_selection(monkeypatch, tmp_path):
     spec = importlib.util.spec_from_file_location('public_evaluate', scripts / 'evaluate.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module, 'load_task_config', lambda *args: {})
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '')
     calls = []
-    monkeypatch.setattr(evaluation, 'main', lambda argv: calls.append(('current', argv)) or 0)
-    argv = ['evaluate.py', '--task', 'arithmetic_factorization', '--config', 'reproduction.yaml',
-            '--method', 'neo', '--seed', '42', '--devices', '0', '--data-root', str(tmp_path),
-            '--training-root', str(tmp_path), '--output-root', str(tmp_path / 'out')]
+    monkeypatch.setattr(evaluation, 'main', lambda argv: calls.append(argv) or 0)
+    argv = ['evaluate.py', '--task', 'arithmetic_factorization', '--seed', '42', '--devices', '0',
+            '--data-root', str(tmp_path), '--training-root', str(tmp_path),
+            '--output-root', str(tmp_path / 'out')]
     monkeypatch.setattr(sys, 'argv', argv)
-    assert module.main() == 0 and calls[-1][0] == 'current'
-
+    assert module.main() == 0
+    assert calls == [['--task', 'arithmetic_factorization', '--alpha', 'all', '--seed', '42',
+                      '--protocol', 'standard', '--data-root', str(tmp_path),
+                      '--output-root', str(tmp_path / 'out'), '--wandb-project', 'LearningToTheorize',
+                      '--wandb-mode', 'online', '--training-root', str(tmp_path)]]
 
 
 @pytest.mark.parametrize('domain', ['arithmetic', 'image'])

@@ -225,3 +225,46 @@ def build_gridworld_observation_loader(
         persistent_workers=False,
     )
     return GridWorldObservationLoader(dataset, sampler, dataloader)
+
+
+class GridWorldSingleObservationLoader:
+    """Individual grids from an episode artifact, shuffled grid by grid each epoch.
+
+    All input, output and answer grids are pooled, so no batch keeps the grids of
+    one episode together. Each rank receives ``per_rank_batch_size * 4`` grids per
+    step, the grid count of one episode batch, which keeps steps per epoch and the
+    learning-rate schedule equal to the episode loader. Batches are returned as
+    ``(grids // 4, 4, 10, 10)`` so the flattening objective applies unchanged.
+    Every rank gets an equal share that is a multiple of four grids; the few
+    grids beyond that are skipped each epoch (none for the released artifact).
+    """
+
+    def __init__(self, dataset: GridWorldHDF5Dataset, config: GridWorldObservationLoaderConfig) -> None:
+        self.dataset = dataset
+        self.config = config
+        episodes = np.empty((len(dataset), 4, 10, 10), dtype=np.uint8)
+        with _h5py().File(dataset.path, "r") as file:
+            for index in range(len(dataset)):
+                grids, answer = GridWorldHDF5Dataset._read_sample(file, index)
+                episodes[index, :3] = grids
+                episodes[index, 3] = answer
+        self.grids = torch.from_numpy(episodes.reshape(-1, 10, 10))
+        self.grids_per_step = 4 * config.per_rank_batch_size
+        self.per_rank = len(self.grids) // (4 * config.world_size) * 4
+        self.steps_per_epoch = -(-self.per_rank // self.grids_per_step)
+        self.epoch = 0
+
+    def set_epoch(self, epoch: int) -> None:
+        if epoch < 0:
+            raise ValueError("epoch must be non-negative")
+        self.epoch = epoch
+
+    def __len__(self) -> int:
+        return self.steps_per_epoch
+
+    def __iter__(self) -> Any:
+        generator = torch.Generator().manual_seed(self.config.seed + self.epoch)
+        order = torch.randperm(len(self.grids), generator=generator)
+        local = order[: self.per_rank * self.config.world_size][self.config.rank :: self.config.world_size]
+        for start in range(0, len(local), self.grids_per_step):
+            yield self.grids[local[start : start + self.grids_per_step]].long().reshape(-1, 4, 10, 10)

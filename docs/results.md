@@ -15,23 +15,23 @@ in both checkpoint selection and final evaluation. Paper baselines were not reru
 | 0.33 | Cont-Mono | Paper | 0.1 | 0 | 0 |
 | 0.33 | Cont-Mono-Opt | Paper | 0 | 0 | 0 |
 | 0.33 | NEO | Paper | 91.1 | 93.3 | 84.5 |
-| 0.33 | NEO | Reproduction | 96.04 ± 4.16 | 95.17 ± 3.82 | 88.08 ± 9.73 |
+| 0.33 | NEO | Reproduction | 96.85 ± 2.90 | 95.48 ± 4.73 | 88.76 ± 9.75 |
 | 0.33 | NEO-S | Paper | 97 | 97.6 | 90.7 |
-| 0.33 | NEO-S | Reproduction | 96.97 ± 3.05 | 96.55 ± 3.02 | 90.09 ± 8.46 |
+| 0.33 | NEO-S | Reproduction | 97.73 ± 1.88 | 97.05 ± 3.25 | 93.57 ± 4.85 |
 | 0.66 | Disc-Mono | Paper | 97.3 | 0 | 0 |
 | 0.66 | Cont-Mono | Paper | 0 | 0 | 0 |
 | 0.66 | Cont-Mono-Opt | Paper | 0 | 0 | 0.1 |
 | 0.66 | NEO | Paper | 96.5 | 96.3 | 92.7 |
-| 0.66 | NEO | Reproduction | 94.31 ± 5.06 | 90.58 ± 9.16 | 83.72 ± 12.33 |
+| 0.66 | NEO | Reproduction | 94.50 ± 1.70 | 93.77 ± 2.10 | 84.44 ± 3.10 |
 | 0.66 | NEO-S | Paper | 98.7 | 98.7 | 94.9 |
-| 0.66 | NEO-S | Reproduction | 95.79 ± 3.96 | 93.41 ± 7.47 | 87.96 ± 10.10 |
+| 0.66 | NEO-S | Reproduction | 95.94 ± 1.27 | 96.15 ± 1.77 | 89.15 ± 3.00 |
 | 1.00 | Disc-Mono | Paper | 92.1 | — | 0 |
 | 1.00 | Cont-Mono | Paper | 0 | — | 0 |
 | 1.00 | Cont-Mono-Opt | Paper | 0 | — | 0.1 |
 | 1.00 | NEO | Paper | 94.9 | — | 89.8 |
-| 1.00 | NEO | Reproduction | 96.27 ± 2.29 | — | 87.53 ± 6.18 |
+| 1.00 | NEO | Reproduction | 93.66 ± 2.89 | — | 80.94 ± 9.79 |
 | 1.00 | NEO-S | Paper | 97.5 | — | 92.6 |
-| 1.00 | NEO-S | Reproduction | 97.63 ± 1.31 | — | 91.74 ± 4.13 |
+| 1.00 | NEO-S | Reproduction | 95.87 ± 1.74 | — | 88.90 ± 5.69 |
 
 ## Arithmetic
 
@@ -41,23 +41,23 @@ in both checkpoint selection and final evaluation. Paper baselines were not reru
 | 0.33 | Cont-Mono | Paper | 0.1 | 0 | 0 |
 | 0.33 | Cont-Mono-Opt | Paper | 0.1 | 0 | 0 |
 | 0.33 | NEO | Paper | 79.2 | 34.5 | 3.8 |
-| 0.33 | NEO | Reproduction | 66.97 ± 5.93 | 17.23 ± 18.42 | 14.85 ± 4.33 |
+| 0.33 | NEO | Reproduction | 80.01 ± 9.48 | 51.89 ± 12.76 | 29.68 ± 7.07 |
 | 0.33 | NEO-S | Paper | 80.9 | 75.9 | 52.4 |
-| 0.33 | NEO-S | Reproduction | 83.62 ± 11.65 | 55.15 ± 35.92 | 64.05 ± 18.13 |
+| 0.33 | NEO-S | Reproduction | 90.45 ± 8.17 | 80.52 ± 20.31 | 77.17 ± 14.32 |
 | 0.66 | Disc-Mono | Paper | 57.2 | 0.2 | 0.4 |
 | 0.66 | Cont-Mono | Paper | 0.2 | 0 | 0.1 |
 | 0.66 | Cont-Mono-Opt | Paper | 0.2 | 0 | 0.1 |
 | 0.66 | NEO | Paper | 73.1 | 57.3 | 1.9 |
-| 0.66 | NEO | Reproduction | 67.93 ± 4.71 | 54.08 ± 15.18 | 17.39 ± 5.67 |
+| 0.66 | NEO | Reproduction | 77.49 ± 10.38 | 71.23 ± 7.36 | 29.17 ± 6.36 |
 | 0.66 | NEO-S | Paper | 93.9 | 95.9 | 69.6 |
-| 0.66 | NEO-S | Reproduction | 90.54 ± 8.70 | 86.41 ± 18.64 | 68.75 ± 8.41 |
+| 0.66 | NEO-S | Reproduction | 93.85 ± 2.80 | 92.95 ± 3.24 | 75.60 ± 13.37 |
 | 1.00 | Disc-Mono | Paper | 47.5 | — | 0.4 |
 | 1.00 | Cont-Mono | Paper | 0 | — | 0 |
 | 1.00 | Cont-Mono-Opt | Paper | 0 | — | 0 |
 | 1.00 | NEO | Paper | 67.5 | — | 2.3 |
-| 1.00 | NEO | Reproduction | 74.81 ± 8.28 | — | 32.17 ± 7.75 |
+| 1.00 | NEO | Reproduction | 74.09 ± 2.10 | — | 35.21 ± 0.62 |
 | 1.00 | NEO-S | Paper | 95.4 | — | 70.7 |
-| 1.00 | NEO-S | Reproduction | 96.00 ± 2.13 | — | 81.31 ± 3.39 |
+| 1.00 | NEO-S | Reproduction | 94.49 ± 3.06 | — | 82.27 ± 6.13 |
 
 ## ImageEditing
 
@@ -80,10 +80,16 @@ in both checkpoint selection and final evaluation. Paper baselines were not reru
 | 1.00 | NEO | Reproduction | 0.0777 ± 0.0018 | — | 0.1111 ± 0.0031 |
 
 NEO-S uses the same selected NEO checkpoints. Each task's three downstream
-seeds share one pretrained observation model. Source revisions and per-seed scores are recorded in [results.json](../configs/results.json).
+seeds share one pretrained observation model.
 
-The reported GridWorld and ImageEditing runs used PyTorch 2.7.1 / CUDA 12.6;
-Arithmetic used PyTorch 2.9.1 / CUDA 12.6.
+Changes since `reproduction-20260929`: GridWorld and Arithmetic observation
+models are now pretrained to reconstruct single observations, with new
+checkpoints, and Arithmetic NEO uses the paper's codebook update, grounding
+normalization and no orthogonal regularization, with action codes sampled during
+training. The pretraining settings and Arithmetic's code sampling were chosen by
+mean ID selection score over these seeds. Per-seed scores are recorded in [results.json](../configs/results.json).
+
+All reported runs used PyTorch 2.7.1 / CUDA 12.6.
 
 OOD results were inspected during development; these runs are not an untouched
 confirmatory test.

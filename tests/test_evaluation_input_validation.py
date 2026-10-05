@@ -8,6 +8,9 @@ from torch import nn
 from tasks.image_editing import evaluation as image
 from tasks.image_editing.data.dataset import EpisodeBatch
 
+CONDITION = {'method': 'neo', 'alpha': '0.33', 'seed': 42, 'training.length_control_start': 1.01,
+             'training.length_control_scheduling': False}
+
 
 class ImageModel(nn.Module):
     def __init__(self, value=0.25):
@@ -16,40 +19,32 @@ class ImageModel(nn.Module):
         self.value = value
 
     def forward(self, grids, **kwargs):
-        metrics = SimpleNamespace(l1=self.value, lpips=0.0)
-        return SimpleNamespace(metrics=metrics, query_metrics=metrics)
+        metrics = SimpleNamespace(l1=self.value)
+        return SimpleNamespace(metrics=metrics, query_metrics=metrics, mean_explanation_length=1.0)
 
 
-def image_case(tmp_path, monkeypatch, *, stored=None, count=3, value=0.25):
+def image_case(tmp_path, monkeypatch, *, stored=CONDITION, count=3, value=0.25):
     model = ImageModel(value)
-    payload = {'model_state_dict': model.state_dict()}
-    if stored is not None:
-        payload['config'] = stored
     checkpoint = tmp_path / 'model.pt'
-    torch.save(payload, checkpoint)
+    torch.save({'model_state_dict': model.state_dict(), 'config': stored}, checkpoint)
     monkeypatch.setattr(image, 'build_neo', lambda _: model)
     monkeypatch.setattr(image, 'ImageEditingDataset', lambda _: [torch.zeros(1)] * count)
-    monkeypatch.setattr(image, 'collate_episodes', lambda rows: EpisodeBatch(
-        torch.stack(rows), torch.stack(rows), ()))
-    return image.EvaluationRunConfig(method='neo', alpha='0.33', seed=42,
-        protocol='id', checkpoint=checkpoint, data_h5=tmp_path / 'data.h5',
-        device='cpu', batch_size=2, num_workers=0)
+    monkeypatch.setattr(image, 'collate_episodes', lambda rows: EpisodeBatch(torch.stack(rows)))
+    return image.EvaluationRunConfig(alpha='0.33', seed=42, protocol='id', checkpoint=checkpoint,
+                                     data_h5=tmp_path / 'data.h5', device='cpu')
 
 
 @pytest.mark.parametrize('changed', [{'seed': 43}, {'alpha': '0.66'}, {'method': 'other'}])
 def test_image_rejects_checkpoint_from_another_condition(tmp_path, monkeypatch, changed):
-    stored = {'method': 'neo', 'alpha': '0.33', 'seed': 42, **changed}
-    config = image_case(tmp_path, monkeypatch, stored=stored)
+    config = image_case(tmp_path, monkeypatch, stored={**CONDITION, **changed})
     with pytest.raises(ValueError, match='checkpoint.*condition'):
         image.evaluate_checkpoint(config)
 
 
-def test_image_accepts_matching_checkpoint_and_raw_weights(tmp_path, monkeypatch):
-    config = image_case(tmp_path, monkeypatch,
-                        stored={'method': 'neo', 'alpha': '0.33', 'seed': 42})
-    assert image.evaluate_checkpoint(config)['episodes'] == 3
-    config = image_case(tmp_path, monkeypatch)
-    assert image.evaluate_checkpoint(config)['query_l1'] == 0.25
+def test_image_accepts_matching_checkpoint(tmp_path, monkeypatch):
+    result = image.evaluate_checkpoint(image_case(tmp_path, monkeypatch))
+    assert result['episodes'] == 3 and result['query_l1'] == 0.25
+    assert result['length_control_coefficient'] == 1.01
 
 
 @pytest.mark.parametrize('count,value', [(0, 0.25), (2, float('nan')), (2, float('inf'))])

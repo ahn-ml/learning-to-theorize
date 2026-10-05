@@ -63,12 +63,12 @@ The same scripts support `gridworld`, `arithmetic_factorization`, and
 python scripts/generate_data.py --task gridworld --data-root data/gridworld
 python scripts/download_checkpoints.py --task gridworld --output-root checkpoints
 
-python scripts/train.py --task gridworld --method neo \
+python scripts/train.py --task gridworld \
   --alpha all --seed all --devices 0 \
   --data-root data/gridworld --output-root runs/gridworld/train \
-  --observation-checkpoint checkpoints/gridworld/observation/best_reconstruction/checkpoint_2941.pt
+  --observation-checkpoint checkpoints/gridworld/observation/best_reconstruction/checkpoint_2206.pt
 
-python scripts/evaluate.py --task gridworld --method neo \
+python scripts/evaluate.py --task gridworld \
   --alpha all --seed all --devices 0 \
   --data-root data/gridworld --training-root runs/gridworld/train \
   --output-root runs/gridworld/evaluate
@@ -99,7 +99,7 @@ for reference; baseline implementations are not included.
 - `src/models/`: NEO, the theory programmer, executor and vector quantizer.
 - `src/tasks/`: task models, datasets, training and evaluation.
 - `scripts/`: data generation, pretraining, training and evaluation commands.
-- `configs/<task>/reproduction.yaml`: task execution recipes.
+- `configs/`: checkpoint manifest and reported results.
 
 Run the tests with `CUDA_VISIBLE_DEVICES= python -m pytest -q tests`.
 The CPU test suite also runs on every pull request and push to `main`.

@@ -1,4 +1,4 @@
-"""Train one arithmetic factorization model for a method, alpha, and seed."""
+"""Train one arithmetic factorization NEO model for an alpha and seed."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from tasks.arithmetic_factorization.experiment import (
     ARITHMETIC_ALPHAS,
     ARITHMETIC_SEEDS,
     get_experiment,
-    trainable_method,
 )
 from tasks.arithmetic_factorization.observation_pretraining import (
     TRANSFERRED_PREFIXES,
@@ -28,7 +27,7 @@ from training.optimization import (
 
 
 def run_name(method: str, alpha: str, seed: int) -> str:
-    """Return the canonical run name for one training cell."""
+    """Return the run directory name for one training cell."""
 
     return f"arithmetic-{method}-alpha-{alpha}-seed-{seed}"
 
@@ -36,23 +35,16 @@ def run_name(method: str, alpha: str, seed: int) -> str:
 def load_observation_model(model: torch.nn.Module, checkpoint: Path) -> dict[str, Any]:
     """Transfer and freeze the pretrained digit autoencoder."""
 
-    from tasks.arithmetic_factorization.task import released_state_dict
-
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     state = payload.get("model_state_dict", payload)
-    transferred = released_state_dict(
-        {
-            key: value
-            for key, value in state.items()
-            if key.startswith(TRANSFERRED_PREFIXES)
-        }
-    )
+    transferred = {
+        key: value
+        for key, value in state.items()
+        if key.startswith(TRANSFERRED_PREFIXES)
+    }
     if not transferred:
         raise ValueError(f"no observation parameters found in {checkpoint}")
     model.load_state_dict(transferred, strict=False)
-    for name, parameter in model.named_parameters():
-        if name in transferred:
-            parameter.requires_grad = False
     model.freeze_observation_model()
     return transferred
 
@@ -75,40 +67,38 @@ def build_optimizer(model: torch.nn.Module, training) -> torch.optim.AdamW:
 
 
 def _evaluate(model, loader, fabric) -> dict[str, float]:
+    """Score ID support and query transfer in FP32 under two rollouts.
+
+    ``latent_*`` metrics follow the latent rollout with MDL length selection;
+    the unprefixed metrics reencode each decoded prediction between steps.
+    Neither consumes random numbers or changes model state.
+    """
+
     from tasks.arithmetic_factorization.data.dataset import unpack_batch
-    from tasks.arithmetic_factorization.validation import released_transfer_batch
+    from tasks.arithmetic_factorization.validation import reencoded_transfer_batch
 
     totals: dict[str, float] = {}
     episodes = 0
+    core = model.module if hasattr(model, "module") else model
     model.eval()
     with torch.no_grad():
         for batch in loader:
             data, _ = unpack_batch(batch, fabric.device)
-            output = model(data, is_eval=True)
+            with torch.autocast(device_type=data.device.type, enabled=False):
+                latent = core(data, is_eval=True)
+            transferred = reencoded_transfer_batch(
+                core, data, max_steps=core.experiment.training.max_transition_length
+            )
             observed = {
-                "loss": float(output.loss),
-                "reconstruction_loss": float(output.reconstruction_loss),
-                "self_explanation_accuracy": output.metrics.number_accuracy,
-                "digit_accuracy": output.metrics.digit_accuracy,
-                "mean_explanation_length": float(output.mean_explanation_length),
+                "reconstruction_loss": float(latent.reconstruction_loss),
+                "latent_transfer_accuracy": latent.query_metrics.number_accuracy,
+                "latent_self_explanation_accuracy": latent.metrics.number_accuracy,
+                "latent_mean_explanation_length": float(latent.mean_explanation_length),
+                "transfer_accuracy": float(transferred["query_solved"].float().mean()),
+                "self_explanation_accuracy": float(transferred["support_solved"].float().mean()),
+                "digit_accuracy": float(transferred["support_digit_correct"].mean()),
+                "mean_explanation_length": float(transferred["selected_lengths"].float().mean()),
             }
-            if output.query_metrics is not None:
-                observed["latent_transfer_accuracy"] = output.query_metrics.number_accuracy
-                observed["latent_self_explanation_accuracy"] = observed["self_explanation_accuracy"]
-                observed["latent_mean_explanation_length"] = observed["mean_explanation_length"]
-                core = model.module if hasattr(model, "module") else model
-                with torch.autocast(device_type=data.device.type, enabled=False):
-                    paper_output = core(data, is_eval=True)
-                observed["paper_transfer_accuracy"] = paper_output.query_metrics.number_accuracy
-                observed["paper_self_explanation_accuracy"] = paper_output.metrics.number_accuracy
-                observed["paper_mean_explanation_length"] = float(paper_output.mean_explanation_length)
-                transferred = released_transfer_batch(
-                    core, data, max_steps=core.experiment.training.max_transition_length
-                )
-                observed["transfer_accuracy"] = float(transferred["query_solved"].float().mean())
-                observed["self_explanation_accuracy"] = float(transferred["support_solved"].float().mean())
-                observed["digit_accuracy"] = float(transferred["support_digit_correct"].mean())
-                observed["mean_explanation_length"] = float(transferred["selected_lengths"].float().mean())
             for key, value in observed.items():
                 totals[key] = totals.get(key, 0.0) + value * len(data)
             episodes += len(data)
@@ -126,7 +116,6 @@ def setup_training(fabric, model, training):
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=("neo",), required=True)
     parser.add_argument("--alpha", required=True, choices=ARITHMETIC_ALPHAS)
     parser.add_argument("--seed", required=True, type=int, choices=ARITHMETIC_SEEDS)
     parser.add_argument("--train-h5", required=True, type=Path)
@@ -143,7 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from lightning.fabric.strategies import DDPStrategy
 
     from tasks.arithmetic_factorization.data.dataset import build_dataloader, unpack_batch
-    from tasks.arithmetic_factorization.task import build_neo
+    from tasks.arithmetic_factorization.task import ArithmeticNEO
     from training.runtime import (
         ExperimentTrackingConfig,
         MetricLog,
@@ -151,7 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed_everything,
     )
 
-    method = trainable_method(arguments.method)
+    method = "neo"
     training = get_experiment(method, arguments.alpha)
     optimization = training.optimization
 
@@ -190,11 +179,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     total_steps = optimization.epochs * len(train_loader)
     if total_steps != training.total_steps:
         raise ValueError(
-            "resolved schedule does not match the paper contract; expected "
+            "resolved schedule does not match the training data; expected "
             f"{training.total_steps} steps, got {total_steps}"
         )
 
-    model = build_neo(method, arguments.alpha)
+    model = ArithmeticNEO(training)
     load_observation_model(model, arguments.observation_checkpoint)
     model, optimizer = setup_training(fabric, model, training)
     schedule = OptimizationConfig(
@@ -216,19 +205,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "schema_version": 1,
         "domain": "arithmetic_factorization",
         "stage": "training",
-        "canonical": True,
-        "validation_protocol": "released reencoded and paper latent-MDL transfer in FP32; bf16 latent metrics separately",
-        "checkpoint_policy": "save every improved ID under either FP32 protocol, every fifth epoch, and final state",
         "action_sampling": {
-            "training": "categorical softmax(-squared_distance/tau)" if training.quantizer.stochastic else "nearest code",
-            "gradient_estimator": "VQ identity straight-through; not relaxed Gumbel-Softmax",
+            "training": "categorical softmax(-squared_distance/tau)",
             "tau_steps": training.action_tau_steps,
-            "clock": "completed optimizer steps; forward/evaluation never advances it",
-            "orthogonal_regularization": (
-                "active: normalized code Gram loss; optimizer correction added to EMA centroid and carried into EMA sums"
-                if training.quantizer.orthogonal_regularization_weight > 0
-                else "inactive"
-            ),
         },
         "method": method,
         "alpha": arguments.alpha,
@@ -264,7 +243,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     exit_code = 0
     global_step = 0
-    best_transfer = {key: float("-inf") for key in ("transfer_accuracy", "paper_transfer_accuracy")}
+    # A checkpoint is saved whenever either FP32 transfer metric improves,
+    # every fifth epoch, and after the final update.
+    best_transfer = {key: float("-inf") for key in ("transfer_accuracy", "latent_transfer_accuracy")}
     try:
         for epoch in range(optimization.epochs):
             metrics = _evaluate(model, test_loader, fabric)
@@ -329,10 +310,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                             # forward, before quantizer.step() advanced its clock.
                             "train/action_temperature": float(output.action_vq_by_length[0].temperature),
                             "train/action_vq_loss": float(output.action_vq_loss),
-                            "train/orthogonal_loss": (
-                                float(output.action_vq_by_length[0].orthogonal_loss)
-                                if output.action_vq_by_length[0].orthogonal_loss is not None else 0.0
-                            ),
                             "length_control_coefficient": (
                                 model.length_control_coefficient
                             ),

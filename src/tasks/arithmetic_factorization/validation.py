@@ -1,4 +1,4 @@
-"""Batched ID validation matching the released final transfer protocol."""
+"""Batched ID validation with reencoded predictions during training."""
 from __future__ import annotations
 
 import torch
@@ -6,12 +6,12 @@ from torch import Tensor
 
 
 @torch.no_grad()
-def released_transfer_batch(model, data: Tensor, *, max_steps: int) -> dict[str, Tensor]:
+def reencoded_transfer_batch(model, data: Tensor, *, max_steps: int) -> dict[str, Tensor]:
     """Infer on support, re-encode each prediction, then replay the support program.
 
     Uses the shortest exactly solved support prefix, otherwise all ``max_steps``.
-    Query targets only score the selected prediction. FP32 matches final evaluation;
-    it deliberately differs from the latent recurrence used by the training loss.
+    Query targets only score the selected prediction. Runs in FP32 and differs
+    from the latent recurrence used by the training loss.
     """
     if data.ndim != 4 or data.shape[1] != 4 or max_steps < 1:
         raise ValueError('expected (B,4,H,W) episodes and a positive horizon')

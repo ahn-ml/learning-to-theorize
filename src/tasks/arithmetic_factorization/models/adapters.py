@@ -1,4 +1,4 @@
-"""Adapt the released arithmetic modules to the shared NEO interfaces."""
+"""Adapt the arithmetic modules to the shared NEO interfaces."""
 
 from __future__ import annotations
 
@@ -39,12 +39,6 @@ class ObservationEncoder(nn.Module):
         super().__init__()
         self.embedding_encoder = DigitEncoder(parameters)
 
-    @property
-    def embedding(self) -> nn.Embedding:
-        """Expose the released parameter name for checkpoint compatibility."""
-
-        return self.embedding_encoder.embedding
-
     def forward(self, grid: Tensor) -> tuple[Tensor, DeterministicPosterior]:
         states, _ = self.embedding_encoder(grid)
         return states, DeterministicPosterior(states)
@@ -57,18 +51,12 @@ class ObservationDecoder(nn.Module):
         super().__init__()
         self.digit_decoder = DigitDecoder(parameters)
 
-    @property
-    def output_layer(self) -> nn.Linear:
-        """Expose the released parameter name for checkpoint compatibility."""
-
-        return self.digit_decoder.output_layer
-
     def forward(self, state: Tensor) -> Tensor:
         return self.digit_decoder(state)
 
 
 class ArithmeticActionQuantizer(nn.Module):
-    """Released EMA vector quantizer exposed as a shared quantizer."""
+    """Arithmetic vector quantizer exposed as a shared quantizer."""
 
     def __init__(self, quantizer: VectorQuantizer) -> None:
         super().__init__()
@@ -87,19 +75,20 @@ class ArithmeticActionQuantizer(nn.Module):
         self, actions: Tensor, *, training_mode: bool = True
     ) -> ActionQuantizerOutput:
         values, result = self.quantizer(actions, training_mode=training_mode)
+        # The arithmetic objective has no codebook-entropy term.
+        zero = result["commitment_loss"].new_zeros(())
         return ActionQuantizerOutput(
             values=values,
             loss=result["quantizer_loss"],
             loss_per_sample=result["quantizer_loss_per_sample"],
             commitment_loss=result["commitment_loss"],
             codebook_loss=result["codebook_loss"],
-            entropy_loss=result["entropy_loss"],
-            sample_entropy=result["sample_entropy"],
-            codebook_entropy=result["codebook_entropy"],
+            entropy_loss=zero,
+            sample_entropy=zero,
+            codebook_entropy=zero,
             temperature=result["temperature"],
             indices=result["min_encoding_indices"],
             logits=result["logit"],
-            orthogonal_loss=result["orthogonal_loss"],
         )
 
 

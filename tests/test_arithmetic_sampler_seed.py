@@ -57,7 +57,7 @@ def test_runner_sets_distributed_sampler_seed(monkeypatch, tmp_path, stage, seed
     argv = ['--train-h5', str(tmp_path/'train.h5'), '--test-h5', str(tmp_path/'test.h5'),
             '--output-root', str(tmp_path/'output')]
     if stage == 'theorizer':
-        argv += ['--method', 'neo', '--alpha', '0.33', '--seed', str(seed),
+        argv += ['--alpha', '0.33', '--seed', str(seed),
                  '--observation-checkpoint', str(tmp_path/'observation.pt')]
     runner = observation_runner if stage == 'observation' else theorizer_runner
     with pytest.raises(LoaderReached):

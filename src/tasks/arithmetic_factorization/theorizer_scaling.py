@@ -1,9 +1,9 @@
-"""Paper NLTP-S sampling and majority-selection semantics for arithmetic.
+"""NEO-S sampling and majority selection for arithmetic.
 
-NLTP-S is the arithmetic name for NEO-S: it samples several candidate theories
-for one support transition, replays each on the query, and selects one by
-majority vote over the sampled operation sequences. It is not a search — the
-candidates are drawn independently and never pruned or expanded.
+NEO-S samples several candidate theories for one support transition, replays
+each on the query, and selects one by majority vote over the sampled operation
+sequences. It is not a search: the candidates are drawn independently and
+never pruned or expanded.
 """
 
 from __future__ import annotations
@@ -13,11 +13,10 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 import torch
-from torch import Tensor
 
 from models.neo import NEO
 
-# Budgets and temperature used for the released arithmetic scaling table.
+# Sampling budgets and temperature for the arithmetic scaling results.
 PAPER_SCALING_BUDGETS: tuple[int, ...] = (
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024,
 )
@@ -81,7 +80,7 @@ class ArithmeticScalingBudgetMetrics:
         return self.support_solved_total / max(1, self.total)
 
     # Vote statistics average over the episodes that produced a vote, not over
-    # every episode, matching the released implementation.
+    # every episode.
 
     @property
     def average_vote_count(self) -> float:
@@ -94,14 +93,14 @@ class ArithmeticScalingBudgetMetrics:
 
 @dataclass(frozen=True, slots=True)
 class ArithmeticTestTimeScalingResult:
-    """NLTP-S results for several nested sampling budgets."""
+    """NEO-S results for several nested sampling budgets."""
 
     max_steps: int
     sample_temperature: float
     budgets: tuple[ArithmeticScalingBudgetMetrics, ...]
 
     def legacy_dict(self) -> dict[str, object]:
-        """Return the released result-key convention."""
+        """Return the results keyed as ``pass@K_self``, ``select@K_trans``, etc."""
 
         result: dict[str, object] = {
             "K_values": [metrics.budget for metrics in self.budgets],
@@ -170,7 +169,7 @@ def budget_outcome(
     query_correct: Sequence[bool],
     budget: int,
 ) -> tuple[bool, bool, bool, bool, int, int, float]:
-    """Score one nested budget as the released implementation does."""
+    """Score one nested budget: oracle pass and majority-selected outcomes."""
 
     if budget < 1:
         raise ValueError("budget must be positive")
@@ -224,8 +223,6 @@ def evaluate_test_time_scaling(
 
     for batch in batches:
         data, _ = unpack_batch(batch, device)
-        if data.shape[1] < 4:
-            continue
         for index in range(data.shape[0]):
             if num_samples is not None and seen >= num_samples:
                 break

@@ -59,7 +59,7 @@ class NEOLengthMetrics(Generic[MetricT]):
 
     @property
     def accuracy(self) -> MetricT:
-        """Backward-compatible alias used by the GridWorld metric logger."""
+        """Alias of :attr:`metrics` used by the GridWorld metric logger."""
 
         return self.metrics
 
@@ -89,33 +89,21 @@ class NEOOutput(Generic[MetricT]):
 
     @property
     def accuracy(self) -> MetricT:
-        """Backward-compatible alias for task metrics."""
+        """Alias of :attr:`metrics` used by the GridWorld metric logger."""
 
         return self.metrics
 
     @property
     def query_accuracy(self) -> MetricT | None:
-        """Backward-compatible alias for query task metrics."""
+        """Alias of :attr:`query_metrics` used by the GridWorld metric logger."""
 
         return self.query_metrics
 
     @property
     def auto_reconstruction_accuracy(self) -> MetricT:
-        """Backward-compatible alias for observation reconstruction metrics."""
+        """Alias of :attr:`auto_reconstruction_metrics` used by the GridWorld metric logger."""
 
         return self.auto_reconstruction_metrics
-
-    @property
-    def prediction_logits(self) -> Tensor:
-        """Backward-compatible alias for task predictions."""
-
-        return self.predictions
-
-    @property
-    def target_grids(self) -> Tensor:
-        """Backward-compatible alias retained for the GridWorld evaluator."""
-
-        return self.targets
 
 
 class NEO(nn.Module, Generic[MetricT]):

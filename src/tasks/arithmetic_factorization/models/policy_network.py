@@ -1,14 +1,10 @@
 import torch
 import torch.nn as nn
 
-from tasks.arithmetic_factorization.models.model_utils import (
-    Encoder,
-    EncoderLayer,
-    sinusoidal_embeddings,
-)
+from tasks.arithmetic_factorization.models.model_utils import Encoder, EncoderLayer
 
 
-class IPDPolicyNetwork(nn.Module):
+class PolicyNetwork(nn.Module):
     """Transformer programmer mapping a support state pair to latent actions."""
     def __init__(self, params):
         super().__init__()
@@ -28,16 +24,8 @@ class IPDPolicyNetwork(nn.Module):
         self.action_tokens = nn.Parameter(scale * torch.randn(self.num_action_tokens, self.d_model))
         self.action_tokens_positional_embedding = nn.Parameter(scale * torch.randn(self.num_action_tokens, self.d_model))
 
-        # State positional embedding - optional sinusoidal (default) or learnable
-        self.use_sinusoidal_state_pos = params.policy.get('use_sinusoidal_state_pos', True)
-
-        if self.use_sinusoidal_state_pos:
-            # Fixed sinusoidal positional embeddings for state tokens
-            self.register_buffer('state_positional_embedding',
-                                sinusoidal_embeddings(self.num_state_tokens, self.d_model // 4))
-        else:
-            # Learnable positional embeddings for state tokens
-            self.state_positional_embedding = nn.Parameter(scale * torch.randn(self.num_state_tokens, self.d_model // 4))
+        # Learnable positional embeddings for state tokens
+        self.state_positional_embedding = nn.Parameter(scale * torch.randn(self.num_state_tokens, self.d_model // 4))
         self.state_pair_positional_embedding = nn.Embedding(2, self.d_model // 4)
         self.combined_state_positional_embedding = nn.Parameter(scale * torch.randn(self.num_state_tokens * 2, self.d_model // 2))
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Generic, Mapping, Protocol, TypeVar
+from typing import Callable, Generic, Mapping, Protocol, TypeVar
 
 import torch
 from torch import Tensor, nn
@@ -94,7 +94,6 @@ def build_program_optimizer(
 ) -> AdamW:
     """Build named programmer, executor and remaining-parameter groups.
 
-    Group and parameter order are preserved when restoring optimizer state.
     Frozen observation parameters are excluded from the remaining group.
     """
 
@@ -174,7 +173,7 @@ def optimization_step(
 
 @dataclass(frozen=True, slots=True)
 class EpochTrainingState:
-    """Unambiguous resume state for a release checkpoint."""
+    """Training progress recorded in a release checkpoint."""
 
     completed_epochs: int
     global_step: int
@@ -185,15 +184,6 @@ class EpochTrainingState:
 
 
 CheckpointScalar = str | int | float | bool | None
-
-
-@dataclass(frozen=True, slots=True)
-class LoadedTrainingCheckpoint:
-    """Training state and provenance restored from a release checkpoint."""
-
-    state: EpochTrainingState
-    optimization: OptimizationConfig
-    metadata: dict[str, CheckpointScalar]
 
 
 def save_training_checkpoint(
@@ -221,40 +211,6 @@ def save_training_checkpoint(
     }
     with checkpoint_path.open("xb") as file:
         torch.save(payload, file)
-
-
-def load_training_checkpoint(
-    path: str | Path,
-    *,
-    model: nn.Module,
-    optimizer: Optimizer,
-    scheduler: LRScheduler,
-    map_location: str | torch.device = "cpu",
-) -> LoadedTrainingCheckpoint:
-    """Strictly restore a release checkpoint using PyTorch's safe loader."""
-
-    payload: Any = torch.load(path, map_location=map_location, weights_only=True)
-    if not isinstance(payload, dict) or payload.get("format_version") != 1:
-        raise ValueError("unsupported training checkpoint format")
-    required = {
-        "model_state_dict",
-        "optimizer_state_dict",
-        "scheduler_state_dict",
-        "training_state",
-        "optimization",
-        "metadata",
-    }
-    missing = sorted(required - set(payload))
-    if missing:
-        raise ValueError(f"training checkpoint is missing fields: {missing}")
-    _unwrap_model(model).load_state_dict(payload["model_state_dict"], strict=True)
-    optimizer.load_state_dict(payload["optimizer_state_dict"])
-    scheduler.load_state_dict(payload["scheduler_state_dict"])
-    return LoadedTrainingCheckpoint(
-        state=EpochTrainingState(**payload["training_state"]),
-        optimization=OptimizationConfig(**payload["optimization"]),
-        metadata=dict(payload["metadata"]),
-    )
 
 
 def _unwrap_model(model: nn.Module) -> nn.Module:

@@ -223,20 +223,6 @@ def verify_profile_artifacts(
     )
 
 
-def verify_artifact_directory(
-    data_directory: str | Path,
-    *,
-    profiles: Iterable[str] | None = None,
-) -> tuple[GridWorldArtifactEvidence, ...]:
-    """Verify selected paper profiles in one canonical data root."""
-
-    root = Path(data_directory).expanduser().resolve()
-    return tuple(
-        verify_artifact(root / expected.filename, expected)
-        for expected in paper_artifacts(profiles)
-    )
-
-
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as file:
@@ -251,6 +237,5 @@ __all__ = [
     "get_artifact_spec",
     "paper_artifacts",
     "verify_artifact",
-    "verify_artifact_directory",
     "verify_profile_artifacts",
 ]

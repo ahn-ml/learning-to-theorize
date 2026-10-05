@@ -53,9 +53,7 @@ class ProgramExecutor(nn.Module):
             self.config.num_state_tokens,
             self.config.state_dim,
         )
-        if self.config.transition_residual:
-            return state + delta
-        return delta
+        return state + delta
 
     def _validate(self, state: Tensor, action: Tensor) -> None:
         expected_state = (self.config.num_state_tokens, self.config.state_dim)

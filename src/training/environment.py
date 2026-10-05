@@ -31,7 +31,6 @@ RUNTIME_KEYS = (
     "numpy_blas",
     "h5py",
     "hdf5",
-    "pyyaml",
     "lightning",
     "wandb",
 )
@@ -53,7 +52,6 @@ def collect_runtime() -> dict[str, str | int | None]:
         "numpy_blas": numpy_blas,
         "h5py": h5py.__version__,
         "hdf5": h5py.version.hdf5_version,
-        "pyyaml": version("PyYAML"),
         "lightning": version("lightning"),
         "wandb": version("wandb"),
     }

@@ -3,6 +3,7 @@ import math
 
 import pytest
 import torch
+import torch.nn.functional as F
 
 from tasks.arithmetic_factorization.experiment import get_experiment
 from tasks.arithmetic_factorization.models.quantizer import VectorQuantizer
@@ -13,7 +14,6 @@ from tasks.arithmetic_factorization.task import build_neo
 def test_published_schedule_reaches_the_real_quantizer(alpha):
     config = get_experiment('neo', alpha)
     core = build_neo('neo', alpha).quantizer.quantizer
-    assert core.stochastic
     assert core.tau_steps == int(config.total_steps * 0.25)
     for progress, expected in [(0, .3), (.5, .175), (1, .05), (2, .05)]:
         core.current_step = int(core.tau_steps * progress)
@@ -21,7 +21,7 @@ def test_published_schedule_reaches_the_real_quantizer(alpha):
 
 
 def test_training_assignments_follow_active_temperature():
-    quantizer = VectorQuantizer(codebook_size=2, embedding_dim=2, stochastic=True,
+    quantizer = VectorQuantizer(codebook_size=2, embedding_dim=2,
                                 tau_start=.3, tau_end=.05, tau_steps=100)
     with torch.no_grad():
         quantizer.embedding.weight.copy_(torch.eye(2))
@@ -43,26 +43,24 @@ def test_training_assignments_follow_active_temperature():
     assert torch.isfinite(z.grad).all() and z.grad.norm() > 0
 
 
-def test_rollout_and_eval_do_not_advance_schedule_or_commit_ema():
-    core = VectorQuantizer(codebook_size=4, embedding_dim=2, stochastic=True,
-                           use_ema=True, tau_start=.3, tau_end=.05, tau_steps=100)
-    before = {k: v.clone() for k, v in core.state_dict().items()}
+def test_rollout_does_not_advance_schedule_and_eval_takes_nearest_code():
+    core = VectorQuantizer(codebook_size=4, embedding_dim=2, use_ema=True,
+                           tau_start=.3, tau_end=.05, tau_steps=100)
     for _ in range(3):
         _, out = core(torch.randn(16, 1, 2))
         assert out['temperature'].item() == pytest.approx(.3)
     assert core.current_step == 0
-    assert all(torch.equal(v, before[k]) for k, v in core.state_dict().items())
-    assert core._ema.counts.sum() == 48
     core.step()
-    assert core.current_step == 1 and core._ema.counts is None
-    assert not torch.equal(core.embedding.weight, before['embedding.weight'])
+    assert core.current_step == 1
+    state = {k: v.clone() for k, v in core.state_dict().items()}
     core.eval()
     z = torch.randn(16, 1, 2)
     rng = torch.get_rng_state().clone()
-    values, out = core(z)  # eval() must be deterministic even with default flag.
-    core.stochastic = False
-    expected, reference = core(z, training_mode=False)
-    assert torch.equal(values, expected)
-    assert torch.equal(out['min_encoding_indices'], reference['min_encoding_indices'])
+    values, out = core(z)  # eval() must be deterministic even with the default flag.
+    codes = F.normalize(core.embedding.weight, dim=-1)
+    nearest = torch.cdist(F.normalize(z.flatten(end_dim=-2), dim=-1), codes).argmin(-1)
+    assert torch.equal(out['min_encoding_indices'], nearest)
+    torch.testing.assert_close(values.flatten(end_dim=-2), codes[nearest])
     assert torch.equal(torch.get_rng_state(), rng)
-    assert core.current_step == 1 and core._ema.counts is None
+    assert all(torch.equal(core.state_dict()[k], v) for k, v in state.items())
+    assert core.current_step == 1

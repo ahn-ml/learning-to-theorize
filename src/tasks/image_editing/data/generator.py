@@ -14,9 +14,8 @@ rejected attempts, so the random-draw sequence remains reproducible.
 from __future__ import annotations
 
 import pickle
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 
@@ -46,19 +45,6 @@ LENGTH_OOD_PAIR_ATTEMPTS = 1
 
 #: Episode attempts per program are capped at this multiple of the target.
 ATTEMPT_MULTIPLIER = 10
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationReport:
-    """Per-program shortfalls, which are expected for the length-OOD profile."""
-
-    requested_per_program: int
-    produced: int
-    shortfalls: tuple[tuple[Program, int], ...]
-
-    @property
-    def complete(self) -> bool:
-        return not self.shortfalls
 
 
 def load_cifar10(cifar_dir: Path, split: str) -> np.ndarray:
@@ -141,20 +127,15 @@ def generate_episodes(
     *,
     seed: int,
     pair_attempts: int = PAIR_ATTEMPTS,
-    stop_after: int | None = None,
-) -> tuple[list[Episode], GenerationReport]:
+) -> tuple[list[Episode], list[tuple[Program, int]]]:
     """Generate episodes for each program in order, under one seeded stream.
 
-    ``stop_after`` truncates the run once that many episodes exist.  It exists
-    for prefix verification and deliberately does *not* change the per-program
-    attempt budget, because lowering ``episodes_per_program`` would shrink the
-    budget and cut generation short on programs with a low acceptance rate.
+    Also returns ``(program, produced)`` for every program that fell short of
+    ``episodes_per_program``, which is expected for the length-OOD profile.
     """
 
     if episodes_per_program < 1:
         raise ValueError("episodes_per_program must be positive")
-    if stop_after is not None and stop_after < 1:
-        raise ValueError("stop_after must be positive when given")
 
     # Use the global RandomState for reproducible dataset generation.
     np.random.seed(seed)
@@ -172,22 +153,9 @@ def generate_episodes(
             if episode is not None:
                 episodes.append(episode)
                 produced += 1
-                if stop_after is not None and len(episodes) >= stop_after:
-                    return episodes, GenerationReport(
-                        requested_per_program=episodes_per_program,
-                        produced=len(episodes),
-                        shortfalls=tuple(shortfalls),
-                    )
         if produced < episodes_per_program:
             shortfalls.append((program, produced))
-
-    report = GenerationReport(
-        requested_per_program=episodes_per_program,
-        produced=len(episodes),
-        shortfalls=tuple(shortfalls),
-    )
-    return episodes, report
-
+    return episodes, shortfalls
 
 
 __all__ = [
@@ -196,7 +164,6 @@ __all__ = [
     "CHANGE_PIXEL_ACCURACY_THRESHOLD",
     "CHANGE_PIXEL_THRESHOLD",
     "FINAL_PIXEL_ACCURACY_THRESHOLD",
-    "GenerationReport",
     "LENGTH_OOD_PAIR_ATTEMPTS",
     "PAIR_ATTEMPTS",
     "apply_and_check",

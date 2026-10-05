@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Download pretrained observation models and verify their recorded checksums."""
+"""Download the pretrained observation models (and the Arithmetic pretraining
+episodes) and verify their recorded checksums."""
 from __future__ import annotations
 
 import argparse
@@ -67,11 +68,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--task', choices=TASKS, required=True)
     parser.add_argument('--output-root', type=Path, required=True)
-    parser.add_argument('--base-url', help='mirror containing the exact recorded archive names')
     args = parser.parse_args()
     manifest = json.loads((ROOT / 'configs/checkpoints.json').read_text())
-    base = args.base_url or ('https://github.com/ahn-ml/learning-to-theorize/releases/download/'
-                             + manifest['release_tag'])
+    base = 'https://github.com/ahn-ml/learning-to-theorize/releases/download/' + manifest['release_tag']
     output = args.output_root.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     for archive in manifest['archives']:
@@ -88,7 +87,7 @@ def main() -> None:
         with tempfile.TemporaryDirectory(dir=output) as temporary:
             path = Path(temporary) / archive['name']
             print(f'Downloading {archive["name"]}', flush=True)
-            with urlopen(base.rstrip('/') + '/' + archive['name']) as response, path.open('wb') as destination:
+            with urlopen(base + '/' + archive['name']) as response, path.open('wb') as destination:
                 shutil.copyfileobj(response, destination)
             if path.stat().st_size != archive['bytes'] or sha256(path) != archive['sha256']:
                 raise ValueError(f'archive checksum mismatch: {archive["name"]}')

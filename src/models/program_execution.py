@@ -59,9 +59,7 @@ class ProgramExecutor(nn.Module):
             self.config.num_state_tokens,
             self.config.state_dim,
         )
-        if self.config.transition_residual:
-            return state + delta
-        return delta
+        return state + delta
 
 
 __all__ = ["ProgramExecutor"]

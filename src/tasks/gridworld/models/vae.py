@@ -1,4 +1,4 @@
-"""Variational autoencoder used by the GridWorld paper experiments."""
+"""Variational autoencoder for GridWorld observations."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor, nn
-from torch.nn import functional as F
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,7 +17,6 @@ class VAEConfig:
     state_dim: int = 32
     num_state_tokens: int = 1
     dropout: float = 0.1
-    variational: bool = True
     sample_posterior: bool = True
 
     def __post_init__(self) -> None:
@@ -50,7 +48,7 @@ class GaussianPosterior:
 
 
 class Encoder(nn.Module):
-    """Encode an integer or soft 10x10 grid into latent state tokens."""
+    """Encode an integer 10x10 grid into latent state tokens."""
 
     def __init__(self, config: VAEConfig) -> None:
         super().__init__()
@@ -74,30 +72,19 @@ class Encoder(nn.Module):
         flattened_dim = 256 * 2 * 2
         output_dim = config.num_state_tokens * config.state_dim
 
-        # Unused by the variational paper model, but checkpoint-compatible.
+        # Unused by forward; it is part of the checkpoint state and of the
+        # parameter initialization order.
         self.to_state = nn.Linear(flattened_dim, output_dim)
-        if config.variational:
-            self.to_mean = nn.Linear(flattened_dim, output_dim)
-            self.to_logvar = nn.Linear(flattened_dim, output_dim)
+        self.to_mean = nn.Linear(flattened_dim, output_dim)
+        self.to_logvar = nn.Linear(flattened_dim, output_dim)
 
-    def forward(self, grid: Tensor) -> tuple[Tensor, GaussianPosterior | None]:
+    def forward(self, grid: Tensor) -> tuple[Tensor, GaussianPosterior]:
         self._validate_grid(grid)
         batch_size = grid.shape[0]
-        if grid.ndim == 4:
-            embedded = torch.einsum("bhwc,cd->bhwd", grid, self.embedding.weight)
-        else:
-            embedded = self.embedding(grid)
+        embedded = self.embedding(grid)
         features = self.conv_layers(embedded.permute(0, 3, 1, 2)).reshape(
             batch_size, -1
         )
-
-        if not self.config.variational:
-            state = self.to_state(features).view(
-                batch_size,
-                self.config.num_state_tokens,
-                self.config.state_dim,
-            )
-            return F.normalize(state, dim=-1), None
 
         posterior = GaussianPosterior(
             mean=self.to_mean(features).view(
@@ -115,31 +102,13 @@ class Encoder(nn.Module):
         return state, posterior
 
     def _validate_grid(self, grid: Tensor) -> None:
-        expected_spatial_shape = (self.config.grid_size, self.config.grid_size)
-        if grid.ndim == 3:
-            if tuple(grid.shape[1:]) != expected_spatial_shape:
-                raise ValueError(
-                    f"expected integer grids shaped (B, 10, 10), got {tuple(grid.shape)}"
-                )
-            if grid.is_floating_point() or grid.is_complex():
-                raise TypeError("rank-three grids must contain integer color indices")
-            return
-        if grid.ndim == 4:
-            valid_shape = (
-                tuple(grid.shape[1:3]) == expected_spatial_shape
-                and grid.shape[-1] == self.config.num_colors
+        expected_shape = (self.config.grid_size, self.config.grid_size)
+        if grid.ndim != 3 or tuple(grid.shape[1:]) != expected_shape:
+            raise ValueError(
+                f"expected integer grids shaped (B, 10, 10), got {tuple(grid.shape)}"
             )
-            if not valid_shape:
-                raise ValueError(
-                    f"expected soft grids shaped (B, 10, 10, {self.config.num_colors}), "
-                    f"got {tuple(grid.shape)}"
-                )
-            if not grid.is_floating_point():
-                raise TypeError("rank-four soft grids must be floating point")
-            return
-        raise ValueError(
-            f"expected a rank-three or rank-four grid tensor, got rank {grid.ndim}"
-        )
+        if grid.is_floating_point() or grid.is_complex():
+            raise TypeError("grids must contain integer color indices")
 
 
 class Decoder(nn.Module):
@@ -184,7 +153,7 @@ class Decoder(nn.Module):
 class VAEOutput:
     logits: Tensor
     state: Tensor
-    posterior: GaussianPosterior | None
+    posterior: GaussianPosterior
 
 
 class VAE(nn.Module):

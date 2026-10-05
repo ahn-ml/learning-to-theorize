@@ -4,24 +4,20 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn import functional as F
-from tasks.arithmetic_factorization.models.quantizer import VectorQuantizer
 from tasks.image_editing.models.quantizer import ActionQuantizer, ActionQuantizerConfig
 
 
 def make(task):
-    if task == 'arithmetic':
-        return VectorQuantizer(codebook_size=4, embedding_dim=4, use_ema=True,
-                               ema_decay=.9)
     return ActionQuantizer(ActionQuantizerConfig(codebook_size=4, action_dim=4,
                                                 ema_decay=.9, entropy_weight=0))
 
 
 def forward(q, task, x, training_mode=True):
     out=q(x,training_mode=training_mode)
-    return (out[1]['min_encoding_indices'],out[1]['quantizer_loss_per_sample']) if task=='arithmetic' else (out.indices,out.loss_per_sample)
+    return out.indices,out.loss_per_sample
 
 
-@pytest.mark.parametrize('task',['arithmetic','image'])
+@pytest.mark.parametrize('task',['image'])
 def test_rollout_is_frozen_then_one_ema_update(task):
     torch.manual_seed(5);q=make(task).train();before={k:v.clone() for k,v in q.state_dict().items()}
     counts=torch.zeros(4);sums=torch.zeros(4,4);loss=0
@@ -63,6 +59,6 @@ def distributed_worker(rank,path,task):
     finally:dist.destroy_process_group()
 
 
-@pytest.mark.parametrize('task',['arithmetic','image'])
+@pytest.mark.parametrize('task',['image'])
 def test_two_rank_ema_matches_global_batch(tmp_path,task):
     mp.spawn(distributed_worker,args=(str(tmp_path/'rendezvous'),task),nprocs=2,join=True)

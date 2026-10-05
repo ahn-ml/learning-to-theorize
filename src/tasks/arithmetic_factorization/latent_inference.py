@@ -26,9 +26,10 @@ def latent_candidates(model, episode: Tensor, *, max_steps: int,
     ``hard_grounding`` reencodes decoded support/query states between steps.
     It leaves scoring and support-only length selection unchanged.
 
-    Greedy uses the model's normal VQ path. Sampling uses the released normalized
-    distance logits at the given temperature. MDL has the model's shortest-exact
-    override. Query labels never select actions, lengths, or winning candidates.
+    Greedy uses the model's nearest-code VQ path. Sampling draws codes from
+    softmax(-distance / temperature) over normalized vectors. MDL selection
+    prefers the shortest exact solution. Query labels never select actions,
+    lengths, or winning candidates.
     Unsolved candidates retain their MDL prediction; NEO-S filters them at voting.
     """
     if episode.ndim != 3 or episode.shape[0] != 4:

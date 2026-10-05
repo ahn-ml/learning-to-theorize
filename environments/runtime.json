@@ -19,7 +19,6 @@
     "numpy_blas": "openblas",
     "h5py": "3.14.0",
     "hdf5": "1.14.6",
-    "pyyaml": "6.0.3",
     "lightning": "2.6.0",
     "wandb": "0.25.1"
   },

@@ -1,4 +1,4 @@
-"""Paper-exact objective and run settings for GridWorld VAE pretraining."""
+"""Recipe and objective for GridWorld observation pretraining."""
 
 from __future__ import annotations
 
@@ -9,33 +9,27 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from tasks.gridworld.models.vae import VAEOutput
 from training import OptimizationConfig
-
-
-PAPER_RECORDED_BUT_INACTIVE_KL_WEIGHT = 1e-5
-PAPER_EFFECTIVE_KL_WEIGHT = 0.0
 
 
 @dataclass(frozen=True, slots=True)
 class GridWorldObservationPretrainingConfig:
-    """GridWorld observation pretraining settings."""
+    """GridWorld observation pretraining settings; the defaults are the release recipe."""
 
     seed: int = 42
-    epochs: int = 500
+    epochs: int = 50
     train_episodes: int = 500_000
     test_episodes: int = 5_000
     per_rank_batch_size: int = 512
     effective_world_size: int = 4
     data_loader_workers: int = 4
-    save_interval_epochs: int = 10
     log_interval_steps: int = 100
-    learning_rate: float = 0.005
+    learning_rate: float = 0.0007
     weight_decay: float = 0.01
     max_gradient_norm: float = 1.0
     warmup_ratio: float = 0.1
     minimum_learning_rate_ratio: float = 0.005
-    kl_weight: float = PAPER_EFFECTIVE_KL_WEIGHT
+    kl_weight: float = 1e-5
 
     def __post_init__(self) -> None:
         positive_integer_fields = (
@@ -44,7 +38,6 @@ class GridWorldObservationPretrainingConfig:
             self.test_episodes,
             self.per_rank_batch_size,
             self.effective_world_size,
-            self.save_interval_epochs,
             self.log_interval_steps,
         )
         if any(value < 1 for value in positive_integer_fields):
@@ -85,7 +78,7 @@ class GridWorldObservationPretrainingConfig:
         )
 
 
-def flatten_paper_observations(episode_grids: Tensor) -> Tensor:
+def flatten_episode_grids(episode_grids: Tensor) -> Tensor:
     """Flatten all input grids followed by all output grids."""
 
     if episode_grids.ndim != 4 or tuple(episode_grids.shape[1:]) != (4, 10, 10):
@@ -114,9 +107,9 @@ class GridWorldObservationObjectiveOutput:
 
 @dataclass(frozen=True, slots=True)
 class GridWorldObservationObjective:
-    """Callable paper objective, with KL available only as an explicit ablation."""
+    """VAE objective: grid reconstruction plus a weighted KL term."""
 
-    kl_weight: float = PAPER_EFFECTIVE_KL_WEIGHT
+    kl_weight: float
 
     def __post_init__(self) -> None:
         if self.kl_weight < 0.0:
@@ -127,28 +120,15 @@ class GridWorldObservationObjective:
         model: nn.Module,
         episode_grids: Tensor,
     ) -> GridWorldObservationObjectiveOutput:
-        observations = flatten_paper_observations(episode_grids)
+        observations = flatten_episode_grids(episode_grids)
         model_output = model(observations)
-        if not isinstance(model_output, VAEOutput):
-            raise TypeError(
-                "GridWorld observation objective requires a compatible observation model"
-            )
-        if model_output.posterior is None:
-            raise ValueError("paper observation pretraining requires a variational encoder")
         reconstruction_loss = F.cross_entropy(
             model_output.logits.reshape(-1, model_output.logits.shape[-1]),
             observations.reshape(-1).long(),
             reduction="mean",
         )
         kl_loss = model_output.posterior.kl_to_standard_normal()
-        # The checkpoint-producing source computed and reported KL, but its
-        # addition to total loss was commented out. Avoid even a zero-valued
-        # arithmetic operation so the default scalar is exactly reconstruction.
-        loss = (
-            reconstruction_loss
-            if self.kl_weight == 0.0
-            else reconstruction_loss + self.kl_weight * kl_loss
-        )
+        loss = reconstruction_loss + self.kl_weight * kl_loss
         with torch.no_grad():
             predictions = model_output.logits.argmax(dim=-1)
             correct = predictions.eq(observations)

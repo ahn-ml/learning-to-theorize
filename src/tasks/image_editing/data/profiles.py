@@ -75,12 +75,6 @@ class SplitSpec:
         if self.pair_attempts < 1:
             raise ValueError("pair_attempts must be positive")
 
-    @property
-    def num_pairs(self) -> int:
-        """Pair count, which is what the paper's dataset-size table reports."""
-
-        return self.num_episodes * 2
-
 
 @dataclass(frozen=True, slots=True)
 class ImageEditingProfile:
@@ -94,7 +88,6 @@ class ImageEditingProfile:
     base_seed: int
     split_seed: int | None
     batch_size: int = ARTIFACT_BATCH_SIZE
-    num_supports: int = 1
 
     def __post_init__(self) -> None:
         if self.min_program_length < 1:
@@ -178,7 +171,6 @@ def _alpha_profile(
 #: Length-OOD generation requests 1,000 episodes per program, but resamples a
 #: rejected pair only once, so roughly 85% of the request is realised.  The
 #: realised count below is the one present in the released artifact.
-LENGTH_OOD_PROGRAMS = 231
 LENGTH_OOD_TEST_EPISODES = 196_943
 
 
@@ -284,7 +276,6 @@ __all__ = [
     "ID_TEST_SEED_OFFSET",
     "ImageEditingProfile",
     "ImageSource",
-    "LENGTH_OOD_PROGRAMS",
     "LENGTH_OOD_TEST_EPISODES",
     "ProgramSource",
     "SplitName",

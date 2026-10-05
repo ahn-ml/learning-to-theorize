@@ -10,17 +10,13 @@ from torch.nn import functional as F
 
 from tasks.arithmetic_factorization.models.model_utils import compute_accuracy
 
-# Digits are drawn from a ten-symbol alphabet.
-NUM_SYMBOLS = 10
-
 
 @dataclass(frozen=True, slots=True)
 class ArithmeticAccuracy:
-    """Digit, whole-number, and macro-F1 accuracy for one evaluation pass."""
+    """Digit and whole-number accuracy for one evaluation pass."""
 
     digit_accuracy: float
     number_accuracy: float
-    macro_f1: float
 
 
 def digit_cross_entropy(prediction: Tensor, target: Tensor) -> Tensor:
@@ -72,13 +68,10 @@ class ArithmeticObjective:
         return per_digit.reshape(target.shape).mean(dim=(1, 2))
 
     def metrics(self, prediction: Tensor, target: Tensor) -> ArithmeticAccuracy:
-        digit_accuracy, number_accuracy, macro_f1 = compute_accuracy(
-            prediction, target, num_classes=NUM_SYMBOLS
-        )
+        digit_accuracy, number_accuracy = compute_accuracy(prediction, target)
         return ArithmeticAccuracy(
             digit_accuracy=float(digit_accuracy),
             number_accuracy=float(number_accuracy),
-            macro_f1=float(macro_f1),
         )
 
     def decode_prediction(self, prediction: Tensor) -> Tensor:
@@ -92,13 +85,10 @@ class ArithmeticObjective:
         return (prediction == target).flatten(1).all(dim=1)
 
     def empty_metrics(self) -> ArithmeticAccuracy:
-        return ArithmeticAccuracy(
-            digit_accuracy=0.0, number_accuracy=0.0, macro_f1=0.0
-        )
+        return ArithmeticAccuracy(digit_accuracy=0.0, number_accuracy=0.0)
 
 
 __all__ = [
-    "NUM_SYMBOLS",
     "ArithmeticAccuracy",
     "ArithmeticObjective",
     "digit_cross_entropy",

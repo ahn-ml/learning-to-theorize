@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate NEO or NEO-S with the canonical task protocol."""
+"""Select a NEO checkpoint on ID data, then evaluate it on every test split."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from _common import (
     TASKS,
     parse_devices,
     add_tracking_arguments,
-    load_task_config,
     tracking_argv,
 )
 
@@ -19,8 +18,6 @@ from _common import (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", choices=TASKS, required=True)
-    parser.add_argument("--config", type=Path, help="default: configs/<task>/reproduction.yaml")
-    parser.add_argument("--method", choices=("neo",), required=True)
     parser.add_argument(
         "--protocol",
         choices=("standard", "test-time-scaling"),
@@ -32,13 +29,11 @@ def main() -> int:
     parser.add_argument("--alpha", choices=("0.33", "0.66", "1.00", "all"), default="all")
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--selection-record", type=Path)
-    parser.add_argument("--selection-only", action="store_true")
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--devices", type=parse_devices, required=True)
     parser.add_argument("--dry-run", action="store_true")
     add_tracking_arguments(parser)
     arguments = parser.parse_args()
-    load_task_config(arguments.config, arguments.task)
     if len(arguments.devices.split(",")) != 1:
         parser.error("evaluation requires exactly one device")
     os.environ["CUDA_VISIBLE_DEVICES"] = arguments.devices
@@ -52,8 +47,6 @@ def main() -> int:
                           ("--selection-record", arguments.selection_record)):
         if value is not None:
             argv.extend((option, str(value)))
-    if arguments.selection_only:
-        argv.append("--selection-only")
     if arguments.dry_run:
         argv.append("--dry-run")
     return evaluate_neo(argv)

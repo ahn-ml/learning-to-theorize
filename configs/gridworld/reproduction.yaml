@@ -1,9 +1,0 @@
-schema_version: 2
-task: gridworld
-pretraining:
-  profile: appendix
-  overrides: reproduction-pretraining.json
-training:
-  preset: paper
-  devices: 1
-  observation_selection: best-reconstruction

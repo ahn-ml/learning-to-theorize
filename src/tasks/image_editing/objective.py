@@ -10,11 +10,9 @@ Two places differ from a discrete task like GridWorld:
 * **Grounding.** The valid-observation projection is 8-bit quantisation,
   ``round(x * 255) / 255``, which plays the role GridWorld's ``argmax`` plays.
 * **Exact match.** There is none.  Pixel-exact agreement between a decoded image
-  and its target never occurs, and the paper's length selection used no
-  exact-match override -- the one override in the released model keyed on latent
-  MSE and was disabled in every paper run.  :meth:`exact_match` therefore always
-  returns ``False``, which makes the shared rollout's override a no-op and
-  reproduces the released selection rule exactly.
+  and its target never occurs, so length selection uses no exact-match
+  override: :meth:`exact_match` always returns ``False``, which makes the shared
+  rollout's override a no-op.
 """
 
 from __future__ import annotations
@@ -36,33 +34,13 @@ QUANTISATION_LEVELS = 255
 
 @dataclass(frozen=True, slots=True)
 class ImageEditingMetrics:
-    """Pixel and perceptual distances for a group of predictions."""
+    """Mean absolute pixel error for a group of predictions."""
 
     l1: float
-    lpips: float
 
 
 class ImageEditingObjective:
-    """Pairing, reconstruction, grounding, and metric rules for 32x32 images.
-
-    The pixel loss follows the experiment contract's ``reconstruction_l1``;
-    every released run used L1.  ``lpips`` is optional: it is a reporting
-    metric only and never enters a gradient, so a run that does not need it can
-    omit the network entirely.
-    """
-
-    def __init__(
-        self,
-        lpips: torch.nn.Module | None = None,
-        *,
-        l1: bool = True,
-    ) -> None:
-        self.lpips = lpips
-        self.l1 = l1
-
-    @property
-    def _pixel_loss(self):
-        return F.l1_loss if self.l1 else F.mse_loss
+    """Pairing, L1 reconstruction, grounding, and metric rules for 32x32 images."""
 
     def validate_batch(self, batch: Tensor, *, is_eval: bool) -> None:
         if batch.ndim != 5:
@@ -93,9 +71,7 @@ class ImageEditingObjective:
         return target
 
     def reconstruction_loss(self, prediction: Tensor, target: Tensor) -> Tensor:
-        return self._pixel_loss(
-            prediction, self._normalize_target(target), reduction="mean"
-        )
+        return F.l1_loss(prediction, self._normalize_target(target), reduction="mean")
 
     def per_sample_reconstruction_loss(
         self,
@@ -103,7 +79,7 @@ class ImageEditingObjective:
         target: Tensor,
     ) -> Tensor:
         target = self._normalize_target(target)
-        elementwise = self._pixel_loss(prediction, target, reduction="none")
+        elementwise = F.l1_loss(prediction, target, reduction="none")
         return elementwise.reshape(target.shape[0], -1).mean(dim=1)
 
     def decode_prediction(self, prediction: Tensor) -> Tensor:
@@ -122,15 +98,10 @@ class ImageEditingObjective:
         target = self._normalize_target(target)
         with torch.no_grad():
             l1 = F.l1_loss(prediction, target, reduction="mean").item()
-            lpips = (
-                self.lpips(prediction, target, reduction="mean").item()
-                if self.lpips is not None
-                else 0.0
-            )
-        return ImageEditingMetrics(l1=l1, lpips=lpips)
+        return ImageEditingMetrics(l1=l1)
 
     def empty_metrics(self) -> ImageEditingMetrics:
-        return ImageEditingMetrics(l1=0.0, lpips=0.0)
+        return ImageEditingMetrics(l1=0.0)
 
 
 __all__ = [

@@ -1,4 +1,4 @@
-"""Image Editing model composition for shared Learning-to-Theorize methods."""
+"""Image Editing model composition for the shared NEO model."""
 
 from __future__ import annotations
 
@@ -17,15 +17,11 @@ from tasks.image_editing.models.theory_programmer import (
     LatentProgramConfig,
     TheoryProgrammer,
 )
-from tasks.image_editing.models.vae import VAE, VAEConfig
+from tasks.image_editing.models.vae import Decoder, Encoder, VAEConfig
 from tasks.image_editing.objective import ImageEditingMetrics, ImageEditingObjective
 
 
-def latent_program_config(
-    training: TrainingConfig,
-    *,
-    film_layers: int | None = None,
-) -> LatentProgramConfig:
+def latent_program_config(training: TrainingConfig, *, film_layers: int) -> LatentProgramConfig:
     """Project the experiment contract onto the latent-program module shape.
 
     ``film_layers`` selects between the programmer's and the executor's depth,
@@ -39,10 +35,9 @@ def latent_program_config(
         num_state_tokens=training.num_state_tokens,
         num_action_tokens=training.num_action_tokens,
         hidden_dim=training.policy_hidden_dim,
-        num_film_layers=film_layers if film_layers is not None else training.policy_film_layers,
+        num_film_layers=film_layers,
         dropout=training.dropout,
         max_transition_length=training.max_transition_length,
-        transition_residual=training.transition_residual,
     )
 
 
@@ -55,24 +50,8 @@ def action_quantizer_config(training: TrainingConfig) -> ActionQuantizerConfig:
         commitment_weight=training.action_commitment_weight,
         entropy_weight=training.action_entropy_weight,
         entropy_temperature=training.action_entropy_temperature,
-        use_ema=training.action_ema,
         ema_decay=training.action_ema_decay,
         ema_epsilon=training.action_ema_epsilon,
-        stochastic=False,
-    )
-
-
-def observation_vae(training: TrainingConfig) -> VAE:
-    """Build the state VAE the pretrained checkpoint loads into."""
-
-    return VAE(
-        VAEConfig(
-            state_dim=training.state_dim,
-            num_state_tokens=training.num_state_tokens,
-            dropout=training.dropout,
-            variational=True,
-            sample_posterior=not training.deterministic_observation_vae,
-        )
     )
 
 
@@ -88,10 +67,16 @@ class ImageEditingNEO(NEO[ImageEditingMetrics]):
     retrained model consumes the same random numbers.
     """
 
-    def __init__(self, experiment: str | tuple[str, str] | Experiment) -> None:
-        resolved = _resolve(experiment)
+    def __init__(self, experiment: str | Experiment) -> None:
+        resolved = get_experiment(experiment) if isinstance(experiment, str) else experiment
         training = resolved.training
-        vae = observation_vae(training)
+        observation = VAEConfig(
+            state_dim=training.state_dim,
+            num_state_tokens=training.num_state_tokens,
+            dropout=training.dropout,
+        )
+        encoder = Encoder(observation)
+        decoder = Decoder(observation)
         programmer_config = latent_program_config(
             training, film_layers=training.policy_film_layers
         )
@@ -100,31 +85,17 @@ class ImageEditingNEO(NEO[ImageEditingMetrics]):
         )
         super().__init__(
             resolved,
-            encoder=vae.encoder,
-            decoder=vae.decoder,
-            objective=ImageEditingObjective(l1=training.reconstruction_l1),
+            encoder=encoder,
+            decoder=decoder,
+            objective=ImageEditingObjective(),
             theory_programmer=TheoryProgrammer(programmer_config),
             program_executor=ProgramExecutor(executor_config),
             quantizer=ActionQuantizer(action_quantizer_config(training)),
         )
-        self.experiment_spec = resolved
 
 
-def _resolve(experiment: str | tuple[str, str] | Experiment) -> Experiment:
-    if isinstance(experiment, Experiment):
-        return experiment
-    if isinstance(experiment, tuple):
-        return get_experiment(*experiment)
-    method, _, alpha = experiment.partition("/")
-    if not alpha:
-        raise ValueError(
-            f"experiment must be 'method/alpha', got {experiment!r}"
-        )
-    return get_experiment(method, alpha)
-
-
-def build_neo(experiment: str | tuple[str, str] | Experiment) -> ImageEditingNEO:
-    """Build the paper model for one resolved Image Editing experiment."""
+def build_neo(experiment: str | Experiment) -> ImageEditingNEO:
+    """Build the paper model for one alpha (``"0.33"``) or resolved experiment."""
 
     return ImageEditingNEO(experiment)
 
@@ -134,5 +105,4 @@ __all__ = [
     "action_quantizer_config",
     "build_neo",
     "latent_program_config",
-    "observation_vae",
 ]

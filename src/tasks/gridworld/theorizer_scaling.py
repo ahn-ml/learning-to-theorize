@@ -1,4 +1,4 @@
-"""Paper NEO-S sampling and majority-selection semantics for GridWorld."""
+"""NEO-S sampling and majority selection for GridWorld."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ class GridWorldTestTimeScalingResult:
     budgets: tuple[GridWorldScalingBudgetMetrics, ...]
 
     def legacy_dict(self) -> dict[str, object]:
-        """Return the exact result-key convention used by ``evaluate_ood.py``."""
+        """Return the serialized test-time-scaling metrics."""
 
         result: dict[str, object] = {
             "K_values": [metrics.budget for metrics in self.budgets],

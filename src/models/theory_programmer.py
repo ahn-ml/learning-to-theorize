@@ -21,6 +21,8 @@ class TheoryProgrammer(nn.Module):
         input_dim = 2 * self.config.num_state_tokens * self.config.state_dim
         output_dim = self.config.num_action_tokens * self.config.action_dim
 
+        # The length embedding and FiLM layers are never read in forward; they
+        # are kept for checkpoint keys and initialization (random-number) parity.
         self.length_embedding = nn.Embedding(
             self.config.max_transition_length + 1,
             hidden_dim,
@@ -51,12 +53,7 @@ class TheoryProgrammer(nn.Module):
         nn.init.zeros_(self.film_beta.weight.data)
         nn.init.zeros_(self.film_beta.bias.data)
 
-    def forward(
-        self,
-        current_state: Tensor,
-        target_state: Tensor,
-        length: Tensor | None = None,
-    ) -> Tensor:
+    def forward(self, current_state: Tensor, target_state: Tensor) -> Tensor:
         batch_size = current_state.shape[0]
         combined = torch.cat(
             [
@@ -65,14 +62,7 @@ class TheoryProgrammer(nn.Module):
             ],
             dim=-1,
         )
-        hidden = self.input_layer(combined)
-        if length is not None:
-            length_embedding = self.length_embedding(length)
-            hidden = (
-                self.film_gamma(length_embedding) * hidden
-                + self.film_beta(length_embedding)
-            )
-        actions = self.output_layers(hidden)
+        actions = self.output_layers(self.input_layer(combined))
         return actions.view(
             batch_size,
             self.config.num_action_tokens,

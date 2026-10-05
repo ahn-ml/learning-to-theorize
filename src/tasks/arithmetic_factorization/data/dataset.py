@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader, Dataset
 # Grids are stored with this sentinel in padded positions.
 PAD_SENTINEL = 255
 
-# The paper-producing loader used four workers per rank.
+# Loader worker processes per rank.
 PAPER_DATA_LOADER_WORKERS = 4
 
 
@@ -52,7 +52,7 @@ class ArithmeticEpisodes(Dataset):
 
 
 def collate_episodes(batch: Sequence[dict[str, Any]]) -> tuple[Tensor, Tensor, list]:
-    """Stack episode grids and answers into the released batch layout."""
+    """Stack episode grids and answers into one batch."""
 
     grids = torch.stack([item["grids"] for item in batch])
     answers = torch.stack([item["answer"] for item in batch])

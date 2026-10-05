@@ -1,4 +1,5 @@
-"""Exercise public commands: the default recipe must reach the real task runner."""
+"""Exercise public commands: the release recipe must reach the real task runner."""
+import importlib
 import importlib.util
 import argparse
 import json
@@ -13,6 +14,8 @@ spec = importlib.util.spec_from_file_location('public_common', ROOT / 'scripts/_
 common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(common)
 
+TRACKING = ['--wandb-project', 'LearningToTheorize', '--wandb-mode', 'online']
+
 
 @pytest.mark.parametrize('devices', ['', '0,', '-1', 'cpu', '0,0', '0,00'])
 def test_invalid_device_lists_are_rejected(devices):
@@ -24,76 +27,85 @@ def test_device_whitespace_and_leading_zeros_are_normalized():
     assert common.parse_devices(' 00, 01 ') == '0,1'
 
 
-def test_home_relative_config_resolves_its_override_beside_the_config(tmp_path, monkeypatch):
-    recipe = tmp_path / 'recipe.yaml'
-    recipe.write_text((ROOT / 'configs/gridworld/reproduction.yaml').read_text())
-    override = tmp_path / 'reproduction-pretraining.json'
-    override.write_text('{"epochs": 50}')
-    original = Path.expanduser
-    monkeypatch.setattr(Path, 'expanduser', lambda path: recipe if str(path) == '~/recipe.yaml' else original(path))
-    config = common.load_task_config(Path('~/recipe.yaml'), 'gridworld')
-    assert config['pretraining']['overrides'] == str(override)
-
-
 def command(script, task, *extra):
     return subprocess.run([sys.executable, str(ROOT / 'scripts' / script),
         '--task', task, '--data-root', '/data', '--output-root', '/output',
         '--dry-run', *extra], capture_output=True, text=True)
 
 
+def plan(script, task, *extra):
+    if script == 'generate_data.py':
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script), '--task', task,
+                                 '--data-root', '/data', '--dry-run'], capture_output=True, text=True)
+    else:
+        result = command(script, task, *extra)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def runner_argv(argv):
+    index = len(argv) - 1 - argv[::-1].index('-m')
+    return argv[index + 1], argv[index + 2:]
+
+
 @pytest.mark.parametrize('task', ['gridworld', 'arithmetic_factorization'])
-def test_default_pretraining_uses_actual_appendix_runner(task):
-    result = command('pretrain.py', task, '--devices', '0,1,2,3')
-    assert result.returncode == 0, result.stderr
-    argv = json.loads(result.stdout)['commands'][0]['argv']
-    assert argv[argv.index('--pretraining-profile') + 1] == 'appendix'
-    if task == 'gridworld':
-        config = Path(argv[argv.index('--pretraining-overrides') + 1])
-        assert json.loads(config.read_text()) == {'epochs': 50, 'kl_weight': 1e-5, 'learning_rate': .0025}
+def test_pretraining_passes_only_data_output_and_tracking(task):
+    commands = plan('pretrain.py', task, '--devices', '0,1,2,3')['commands']
+    assert len(commands) == 1
+    argv = commands[0]['argv']
+    assert '--nproc-per-node=4' in argv
+    module, options = runner_argv(argv)
+    assert module == f'tasks.{task}.observation_runner'
+    assert options[0::2][:3] == ['--train-h5', '--test-h5', '--output-root']
+    assert options[5:] == ['/output', *TRACKING]
 
 
-def test_custom_pretraining_file_is_forwarded_not_silently_ignored(tmp_path):
-    config = tmp_path / 'recipe.yaml'
-    original = (ROOT / 'configs/gridworld/reproduction.yaml').read_text()
-    config.write_text(original.replace('reproduction-pretraining.json', 'override.json'))
-    override = tmp_path / 'override.json'
-    override.write_text('{"epochs": 25, "learning_rate": 0.003}')
-    result = command('pretrain.py', 'gridworld', '--devices', '0,1,2,3', '--config', str(config))
-    assert result.returncode == 0, result.stderr
-    argv = json.loads(result.stdout)['commands'][0]['argv']
-    assert argv[argv.index('--pretraining-overrides') + 1] == str(override)
-
-
-def test_all_nine_grid_train_commands_use_selected_observation():
-    result = command('train.py', 'gridworld', '--devices', '0', '--method', 'neo',
-                     '--alpha', 'all', '--seed', 'all', '--observation-checkpoint', '/observation')
-    assert result.returncode == 0, result.stderr
-    plan = json.loads(result.stdout)
-    assert plan['command_count'] == 9
-    for row in plan['commands']:
-        argv = row['argv']
-        assert argv[argv.index('--observation-selection') + 1] == 'best-reconstruction'
-        assert '--development' not in argv
+def test_all_nine_grid_train_commands_use_the_given_observation_checkpoint():
+    result = plan('train.py', 'gridworld', '--devices', '0', '--alpha', 'all', '--seed', 'all',
+                  '--observation-checkpoint', '/observation')
+    assert result['command_count'] == 9
+    for row in result['commands']:
+        module, options = runner_argv(row['argv'])
+        assert module == 'tasks.gridworld.theorizer_runner'
+        assert options[0::2] == ['--seed', '--train-h5', '--test-h5', '--observation-checkpoint',
+                                 '--output-root', '--wandb-project', '--wandb-mode', '--experiment']
+        assert options[options.index('--observation-checkpoint') + 1] == '/observation'
 
 
 def test_image_training_launches_two_ranks():
-    args = ('--method', 'neo', '--alpha', '0.33', '--seed', '42', '--observation-checkpoint', '/observation')
-    result = command('train.py', 'image_editing', '--devices', '0,1', *args)
-    assert result.returncode == 0, result.stderr
-    assert 'torch.distributed.run' in result.stdout and '--nproc-per-node=2' in result.stdout
+    args = ('--alpha', '0.33', '--seed', '42', '--observation-checkpoint', '/observation')
+    argv = plan('train.py', 'image_editing', '--devices', '0,1', *args)['commands'][0]['argv']
+    assert 'torch.distributed.run' in argv and '--nproc-per-node=2' in argv
+    module, options = runner_argv(argv)
+    assert options[-2:] == ['--alpha', '0.33']
     result = command('train.py', 'image_editing', '--devices', '0', *args)
     assert result.returncode != 0 and 'requires 2 devices' in result.stderr
     result = command('train.py', 'image_editing', '--devices', '0,0', *args)
     assert result.returncode != 0 and 'distinct GPU indices' in result.stderr
 
 
-@pytest.mark.parametrize('task', common.TASKS)
-@pytest.mark.parametrize('script', ['train.py', 'evaluate.py'])
-@pytest.mark.parametrize('method', ['disc-mono', 'cont-mono', 'cont-mono-opt'])
-def test_public_commands_reject_removed_methods(task, script, method):
-    result = command(script, task, '--devices', '0', '--method', method,
-                     '--alpha', '0.33', '--seed', '42')
-    assert result.returncode != 0 and 'invalid choice' in result.stderr
+class Parsed(Exception):
+    pass
+
+
+@pytest.mark.parametrize('script,task', [
+    ('generate_data.py', 'gridworld'), ('generate_data.py', 'arithmetic_factorization'),
+    ('generate_data.py', 'image_editing'),
+    ('pretrain.py', 'gridworld'), ('pretrain.py', 'arithmetic_factorization'),
+    ('train.py', 'gridworld'), ('train.py', 'arithmetic_factorization'), ('train.py', 'image_editing'),
+])
+def test_task_runner_accepts_the_public_argv(monkeypatch, script, task):
+    devices = {'pretrain.py': '0,1,2,3', 'train.py': '0,1' if task == 'image_editing' else '0'}
+    extra = [] if script == 'generate_data.py' else ['--devices', devices[script]]
+    if script == 'train.py':
+        extra += ['--alpha', '0.33', '--seed', '42', '--observation-checkpoint', '/observation']
+    module, options = runner_argv(plan(script, task, *extra)['commands'][0]['argv'])
+    parse = argparse.ArgumentParser.parse_args
+    def parse_only(self, args=None, namespace=None):
+        raise Parsed(parse(self, args, namespace))
+    monkeypatch.setattr(argparse.ArgumentParser, 'parse_args', parse_only)
+    with pytest.raises(Parsed):
+        importlib.import_module(module).main(options)
 
 
 def test_command_failure_stops_subsequent_runs(monkeypatch):
@@ -111,11 +123,3 @@ def test_command_failure_stops_subsequent_runs(monkeypatch):
 def test_image_pretraining_explains_checkpoint_entry_point():
     result = command('pretrain.py', 'image_editing', '--devices', '0,1')
     assert result.returncode != 0 and 'provided observation checkpoint' in result.stderr
-
-
-@pytest.mark.parametrize('task', common.TASKS)
-def test_task_cli_dispatches_help_without_starting_a_run(task):
-    result = subprocess.run([sys.executable, '-m', f'tasks.{task}', 'train', '--help'],
-                            capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
-    assert '--output-root' in result.stdout

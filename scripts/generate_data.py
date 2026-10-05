@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""Generate every canonical dataset for one paper task."""
+"""Generate every dataset for one task."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from _common import TASKS, load_task_config, module_command, run_commands
+from _common import TASKS, module_command, run_commands
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", choices=TASKS, required=True)
-    parser.add_argument("--config", type=Path, help="default: configs/<task>/reproduction.yaml")
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true")
     arguments = parser.parse_args()
-    load_task_config(arguments.config, arguments.task)
     root = arguments.data_root.expanduser().resolve()
     module = f"tasks.{arguments.task}.data.cli"
     if arguments.task != "image_editing":

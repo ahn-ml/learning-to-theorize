@@ -1,7 +1,7 @@
-"""Public NEO evaluation: select on ID query, then freeze and test.
+"""NEO evaluation: select on ID query, then freeze and test.
 
-Task-specific numerical inference remains in the existing evaluators. This
-module only owns checkpoint selection, artifact provenance and stage ordering.
+Task-specific inference lives in each task's evaluator. This module owns
+checkpoint selection, artifact provenance and stage ordering.
 """
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from dataclasses import asdict
 import json
 import os
 from pathlib import Path
-import socket
 
 import h5py
 import torch
@@ -27,6 +26,8 @@ TASK_DOMAINS = {"gridworld": "gridworld", "image_editing": "image",
 ALPHAS = ("0.33", "0.66", "1.00")
 SEEDS = (42, 43, 44)
 SELECTION_POLICY = "task-grounding-id-query-v2"
+DEVICE = "cuda"
+ARITHMETIC_EPISODES = 5000
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -76,7 +77,7 @@ def checkpoint_directory(domain: str, alpha: str, seed: int, root: Path) -> Path
 
 def select_checkpoint(*, domain: str, alpha: str, seed: int, directory: Path,
                       id_path: Path, output: Path, device: str, tracking: dict,
-                      source: dict, smoke_episodes: int | None = None) -> dict:
+                      source: dict) -> dict:
     """Finish the full ID-only sweep before publishing a selected checkpoint.
 
     A completed selection is reusable only with identical code, inputs and
@@ -90,8 +91,7 @@ def select_checkpoint(*, domain: str, alpha: str, seed: int, directory: Path,
                  for p in paths]
     contract = {"policy": SELECTION_POLICY, "domain": domain, "alpha": alpha, "seed": seed,
                 "id_data": identity, "candidates": inventory, "source": source,
-                "hard_grounding": HARD_GROUNDING[domain],
-                "smoke_episodes": smoke_episodes}
+                "hard_grounding": HARD_GROUNDING[domain]}
     selected_path = output / "selected.json"
     if selected_path.exists():
         previous = json.loads(selected_path.read_text())
@@ -101,7 +101,7 @@ def select_checkpoint(*, domain: str, alpha: str, seed: int, directory: Path,
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / "manifest.json", contract)
     seed_everything(seed)
-    episodes = read_episodes(id_path, domain, smoke_episodes)
+    episodes = read_episodes(id_path, domain)
     model = build_model(domain, alpha, device)
     log = MetricLog(output / "metrics.jsonl",
                     ExperimentTrackingConfig(name=f"{domain}-{alpha}-{seed}-selection", **tracking),
@@ -123,8 +123,7 @@ def select_checkpoint(*, domain: str, alpha: str, seed: int, directory: Path,
         best = choose_best(records)
         result = {"checkpoint": best["checkpoint"], "checkpoint_sha256": best["checkpoint_sha256"],
                   "selection": best, "candidate_count": len(records), "id_data": identity,
-                  "id_is_selection_data": True, "contract": contract,
-                  "development": smoke_episodes is not None}
+                  "id_is_selection_data": True, "contract": contract}
         write_json(selected_path, result)
         success = True
         return result
@@ -133,8 +132,8 @@ def select_checkpoint(*, domain: str, alpha: str, seed: int, directory: Path,
 
 
 def read_selection(path: Path, *, domain: str, alpha: str, seed: int, id_path: Path,
-                   device: str, smoke: bool = False) -> dict:
-    """Import a frozen ID-only selection, including the verified campaign format."""
+                   device: str) -> dict:
+    """Import a frozen ID-only selection written by :func:`select_checkpoint`."""
     record = json.loads(path.read_text())
     checkpoint = Path(record["checkpoint"]).expanduser()
     if not checkpoint.is_absolute():
@@ -145,29 +144,26 @@ def read_selection(path: Path, *, domain: str, alpha: str, seed: int, id_path: P
     choose_best([chosen])
     if chosen["hard_grounding"] != HARD_GROUNDING[domain]:
         raise ValueError("selection grounding setting differs from the task evaluation setting")
-    if record.get("development", False) and not smoke:
-        raise ValueError("a smoke selection cannot be used for a full evaluation")
     identity = data_identity(id_path)
     if any(record["id_data"][key] != identity[key] for key in ("sha256", "episodes")):
         raise ValueError("selection ID artifact does not match this task/alpha")
-    if chosen["episodes"] != identity["episodes"] and not smoke:
+    if chosen["episodes"] != identity["episodes"]:
         raise ValueError("selection did not use the full ID artifact")
     if record["checkpoint_sha256"] != checkpoint_hash(Path(record["checkpoint"])):
         raise ValueError("selected checkpoint hash mismatch")
     if chosen["checkpoint_sha256"] != record["checkpoint_sha256"]:
         raise ValueError("selection score and checkpoint identify different weights")
-    if "contract" in record:
-        contract = record["contract"]
-        if (contract["domain"], contract["alpha"], contract["seed"]) != (domain, alpha, seed):
-            raise ValueError("selection belongs to a different model condition")
+    contract = record["contract"]
+    if (contract["domain"], contract["alpha"], contract["seed"]) != (domain, alpha, seed):
+        raise ValueError("selection belongs to a different model condition")
     model = build_model(domain, alpha, device)
     load_candidate(model, domain, alpha, seed, Path(record["checkpoint"]))
     return {**record, "imported_selection": str(path.resolve())}
 
 
 def evaluate_arithmetic(checkpoint: Path, path: Path, *, alpha: str, seed: int,
-                        split: str, device: str, scaling: bool, limit: int = 5000) -> dict:
-    """The verified FP32 matched rollout, with unchanged stopping and RNG."""
+                        split: str, device: str, scaling: bool) -> dict:
+    """Greedy FP32 rollout on the first 5,000 episodes, optionally with test-time scaling."""
     from tasks.arithmetic_factorization.data.dataset import build_dataloader, unpack_batch
     from tasks.arithmetic_factorization.latent_inference import latent_candidates
     from tasks.arithmetic_factorization.theorizer_scaling import (
@@ -186,12 +182,12 @@ def evaluate_arithmetic(checkpoint: Path, path: Path, *, alpha: str, seed: int,
             support += int(result.support_correct.item())
             filtered += int((result.query_correct & result.support_correct).item())
             n += 1
-            if n == limit:
+            if n == ARITHMETIC_EPISODES:
                 break
-        if n == limit:
+        if n == ARITHMETIC_EPISODES:
             break
-    if n != limit:
-        raise ValueError(f"expected {limit} Arithmetic episodes, found {n}")
+    if n != ARITHMETIC_EPISODES:
+        raise ValueError(f"expected {ARITHMETIC_EPISODES} Arithmetic episodes, found {n}")
     metrics = {"greedy": {"episodes": n, "transfer": correct / n, "support": support / n,
                           "support_filtered_transfer": filtered / n},
                "coefficient": model.length_control_coefficient, "precision": "float32"}
@@ -199,17 +195,16 @@ def evaluate_arithmetic(checkpoint: Path, path: Path, *, alpha: str, seed: int,
         torch.manual_seed(42)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(42)
-        budgets = PAPER_SCALING_BUDGETS if limit == 5000 else (1, 4)
         metrics["scaling"] = evaluate_test_time_scaling(
-            model, loader, max_steps=horizon, budgets=budgets, sample_temperature=1.0,
-            device=device, num_samples=limit, hard_grounding=True).legacy_dict()
+            model, loader, max_steps=horizon, budgets=PAPER_SCALING_BUDGETS, sample_temperature=1.0,
+            device=device, num_samples=ARITHMETIC_EPISODES, hard_grounding=True).legacy_dict()
         metrics["sampling_rng_seed"] = 42
     return metrics
 
 
 def evaluate_selected(*, domain: str, alpha: str, seed: int, selected: dict,
                       data_root: Path, output: Path, protocol: str, device: str,
-                      tracking: dict, source: dict, smoke_episodes: int | None = None) -> list[dict]:
+                      tracking: dict, source: dict) -> list[dict]:
     """Only this stage resolves/opens OOD inputs; the winner is already frozen."""
     hard_grounding = HARD_GROUNDING[domain]
     if selected["selection"]["hard_grounding"] != hard_grounding:
@@ -227,7 +222,6 @@ def evaluate_selected(*, domain: str, alpha: str, seed: int, selected: dict,
         config = {"domain": domain, "alpha": alpha, "seed": seed, "split": split,
                   "protocol": protocol, "hard_grounding": hard_grounding, "id_is_selection_data": True,
                   "selected": selected, "data": identity, "source": source,
-                  "development": smoke_episodes is not None, "host": socket.gethostname(),
                   "torch": torch.__version__, "cuda": torch.version.cuda,
                   "device": device, "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
         trackdir = output / split
@@ -238,25 +232,22 @@ def evaluate_selected(*, domain: str, alpha: str, seed: int, selected: dict,
         try:
             if domain == "arithmetic":
                 metrics = evaluate_arithmetic(checkpoint, path, alpha=alpha, seed=seed, split=split,
-                                              device=device, scaling=protocol == "test-time-scaling",
-                                              limit=smoke_episodes or 5000)
+                                              device=device, scaling=protocol == "test-time-scaling")
             elif domain == "image":
                 from tasks.image_editing.evaluation import EvaluationRunConfig, evaluate_checkpoint
                 metrics = evaluate_checkpoint(EvaluationRunConfig(
-                    method="neo", alpha=alpha, protocol=split.replace("compositional", "comp"),
+                    alpha=alpha, protocol=split.replace("compositional", "comp"),
                     checkpoint=checkpoint, data_h5=path, device=device, seed=seed,
-                    restore_checkpoint_schedule=True, hard_grounding=hard_grounding, num_workers=0,
-                    max_batches=1 if smoke_episodes else None))
+                    hard_grounding=hard_grounding))
             else:
                 from tasks.gridworld.theorizer_evaluation import GridWorldEvaluationRunConfig, run_theorizer_evaluation
-                # GridWorld owns its canonical artifact checks and tracking.
+                # The GridWorld evaluator checks its artifacts and tracks the run itself.
                 log.finish(exit_code=0)
                 log = None
                 run, result = run_theorizer_evaluation(GridWorldEvaluationRunConfig(
                     experiment=f"alpha-{alpha}", model_seed=seed, split=split, checkpoint=checkpoint,
                     data_h5=path, output_root=trackdir / "evaluation", protocol=protocol,
-                    hard_grounding=hard_grounding, canonical=smoke_episodes is None,
-                    num_samples=smoke_episodes, force_cpu=device == "cpu",
+                    hard_grounding=hard_grounding,
                     wandb_project=tracking["project"], wandb_entity=tracking.get("entity"),
                     wandb_group=tracking.get("group"), wandb_mode=tracking["mode"]))
                 metrics = {protocol: result.legacy_dict(), "output": str(run)}
@@ -280,12 +271,9 @@ def main(argv=None) -> int:
     parser.add_argument("--training-root", type=Path)
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--selection-record", type=Path)
-    parser.add_argument("--selection-only", action="store_true")
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--protocol", choices=("standard", "test-time-scaling"), default="standard")
-    parser.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
-    parser.add_argument("--smoke-episodes", type=int, help="development only; Image uses one batch of 64")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--wandb-project", default="LearningToTheorize")
     parser.add_argument("--wandb-entity")
@@ -295,8 +283,6 @@ def main(argv=None) -> int:
     domain = TASK_DOMAINS[args.task]
     if domain == "image" and args.protocol != "standard":
         parser.error("ImageEditing has no NEO-S protocol")
-    if args.smoke_episodes is not None and args.smoke_episodes < 1:
-        parser.error("--smoke-episodes must be positive")
     if args.selection_record and args.checkpoint_directory:
         parser.error("choose --selection-record or --checkpoint-directory")
     if (args.selection_record or args.checkpoint_directory) and (args.alpha == "all" or args.seed == "all"):
@@ -308,7 +294,7 @@ def main(argv=None) -> int:
     if args.dry_run:
         print(json.dumps({"task": args.task, "alphas": alphas, "seeds": seeds,
                           "selection": "full ID query; no OOD", "hard_grounding": HARD_GROUNDING[domain],
-                          "protocol": args.protocol, "selection_only": args.selection_only}))
+                          "protocol": args.protocol}))
         return 0
     torch.set_num_threads(1)
     source = asdict(capture_git_source(Path(__file__).parent))
@@ -320,17 +306,15 @@ def main(argv=None) -> int:
             id_path = data_path(domain, alpha, "id", args.data_root)
             if args.selection_record:
                 selected = read_selection(args.selection_record, domain=domain, alpha=alpha, seed=seed,
-                                          id_path=id_path, device=args.device, smoke=args.smoke_episodes is not None)
+                                          id_path=id_path, device=DEVICE)
             else:
                 directory = args.checkpoint_directory or checkpoint_directory(domain, alpha, seed, args.training_root)
                 selected = select_checkpoint(domain=domain, alpha=alpha, seed=seed, directory=directory,
-                    id_path=id_path, output=args.output_root / "selection" / key, device=args.device,
-                    tracking=tracking, source=source, smoke_episodes=args.smoke_episodes)
-            if not args.selection_only:
-                evaluate_selected(domain=domain, alpha=alpha, seed=seed, selected=selected,
-                    data_root=args.data_root, output=args.output_root / "evaluation" / key / args.protocol,
-                    protocol=args.protocol, device=args.device, tracking=tracking, source=source,
-                    smoke_episodes=args.smoke_episodes)
+                    id_path=id_path, output=args.output_root / "selection" / key, device=DEVICE,
+                    tracking=tracking, source=source)
+            evaluate_selected(domain=domain, alpha=alpha, seed=seed, selected=selected,
+                data_root=args.data_root, output=args.output_root / "evaluation" / key / args.protocol,
+                protocol=args.protocol, device=DEVICE, tracking=tracking, source=source)
     return 0
 
 

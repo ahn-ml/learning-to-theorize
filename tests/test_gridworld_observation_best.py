@@ -25,7 +25,7 @@ def test_best_snapshot_retains_first_tie_and_does_not_change_training(tmp_path):
             tmp_path, score=score, best_score=best, model=model,
             optimizer=optimizer, scheduler=scheduler,
             state=EpochTrainingState(completed_epochs=step, global_step=step),
-            optimization=configuration, metadata={"canonical": False},
+            optimization=configuration, metadata={"evaluated_epoch": step},
         )
         assert torch.equal(rng, torch.get_rng_state())
         record = json.loads((tmp_path / 'best_reconstruction.json').read_text())
@@ -43,7 +43,8 @@ def test_best_snapshot_retains_first_tie_and_does_not_change_training(tmp_path):
         for actual, expected in zip(model.parameters(), control.parameters()):
             assert torch.equal(actual, expected)
     assert len(list((tmp_path / 'best_reconstruction').glob('*.pt'))) == 2
-    payload = torch.load(record['checkpoint'], weights_only=True)
+    assert record['checkpoint'] == 'best_reconstruction/checkpoint_2.pt'
+    payload = torch.load(tmp_path / record['checkpoint'], weights_only=True)
     assert payload['training_state'] == asdict(EpochTrainingState(1, 1))
     assert payload['optimization'] == asdict(configuration)
     assert record['score'] == 1. and not record['selection_uses_ood_scores']

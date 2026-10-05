@@ -29,12 +29,11 @@ class GridWorldNEO(NEO[GridWorldAccuracy]):
                 state_dim=training.state_dim,
                 num_state_tokens=training.num_state_tokens,
                 dropout=training.dropout,
-                variational=True,
                 sample_posterior=not training.deterministic_observation_vae,
             )
         )
-        # Preserve the paper initialization order: encoder, decoder,
-        # programmer, executor, then quantizer. NEO constructs the last three.
+        # Initialization order: encoder, decoder, programmer, executor, then
+        # quantizer. NEO constructs the last three.
         super().__init__(
             resolved,
             encoder=vae.encoder,
@@ -44,7 +43,7 @@ class GridWorldNEO(NEO[GridWorldAccuracy]):
 
 
 def build_neo(experiment: str | GridWorldAlphaExperiment) -> GridWorldNEO:
-    """Build the paper NEO model for one resolved GridWorld experiment."""
+    """Build the NEO model for one resolved GridWorld experiment."""
 
     return GridWorldNEO(experiment)
 

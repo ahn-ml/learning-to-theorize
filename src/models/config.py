@@ -18,13 +18,11 @@ class LatentProgramConfig(Protocol):
     num_action_tokens: int
     policy_hidden_dim: int
     transition_hidden_dim: int
-    transition_residual: bool
     dropout: float
     max_transition_length: int
 
     action_codebook_size: int
     action_commitment_weight: float
-    stochastic_action_vq: bool
     action_tau_start: float
     action_tau_end: float
 

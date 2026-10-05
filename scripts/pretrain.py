@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pretrain the task observation model with the paper configuration."""
+"""Pretrain the task observation model with the release recipe."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import argparse
 from pathlib import Path
 
 from _common import (
+    PRETRAINING_PROCESSES,
     TASKS,
     parse_devices,
     add_tracking_arguments,
-    load_task_config,
     module_command,
     run_commands,
     gridworld_artifact,
@@ -21,19 +21,16 @@ from _common import (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", choices=TASKS, required=True)
-    parser.add_argument("--config", type=Path, help="default: configs/<task>/reproduction.yaml")
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--devices", type=parse_devices, required=True)
     parser.add_argument("--dry-run", action="store_true")
     add_tracking_arguments(parser)
     arguments = parser.parse_args()
-    config = load_task_config(arguments.config, arguments.task)
-    pretraining = config["pretraining"]
-    if pretraining["profile"] == "pretrained":
+    if arguments.task == "image_editing":
         parser.error("ImageEditing uses the provided observation checkpoint; see docs/reproduction.md")
-    if len(arguments.devices.split(",")) != 4:
-        parser.error("observation pretraining requires 4 devices")
+    if len(arguments.devices.split(",")) != PRETRAINING_PROCESSES:
+        parser.error(f"observation pretraining requires {PRETRAINING_PROCESSES} devices")
     root = arguments.data_root.expanduser().resolve()
     if arguments.task == "gridworld":
         train = gridworld_artifact(root, "vae-pretraining", "practice")
@@ -41,13 +38,10 @@ def main() -> int:
     else:
         from tasks.arithmetic_factorization.data.profiles import PRETRAINING_PROFILE
         train, test = root / PRETRAINING_PROFILE.train.filename, root / PRETRAINING_PROFILE.test.filename
-    options = ["--pretraining-profile", pretraining["profile"],
-               "--train-h5", train, "--test-h5", test,
-               "--output-root", arguments.output_root.expanduser().resolve(),
-               *tracking_argv(arguments)]
-    if "overrides" in pretraining:
-        options += ["--pretraining-overrides", pretraining["overrides"]]
-    command = module_command(f"tasks.{arguments.task}.observation_runner", *options, processes=4)
+    command = module_command(f"tasks.{arguments.task}.observation_runner",
+                             "--train-h5", train, "--test-h5", test,
+                             "--output-root", arguments.output_root.expanduser().resolve(),
+                             *tracking_argv(arguments), processes=PRETRAINING_PROCESSES)
     return run_commands([command], devices=arguments.devices, dry_run=arguments.dry_run)
 
 

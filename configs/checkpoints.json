@@ -1,36 +1,31 @@
 {
   "schema_version": 1,
-  "release": "reproduction-20260929",
+  "release": "reproduction-20261004",
   "files": [
     {
-      "path": "gridworld/observation/best_reconstruction/checkpoint_2941.pt",
-      "sha256": "f7ccf74bbed94a598e2971be02e1ddbbb67787e6baf54fe43731e4a2428e487f",
-      "bytes": 11592787
-    },
-    {
-      "path": "gridworld/observation/config.json",
-      "sha256": "5745c4294275398f7c3bc83cee7fd6236069cebd44b2d24968cb708062f99e62",
-      "bytes": 1106
-    },
-    {
-      "path": "gridworld/observation/status.json",
-      "sha256": "130c019c4fa4fc688e59d571222bfef2dba39a6445e8780ea8b380999bc12683",
-      "bytes": 126
-    },
-    {
-      "path": "gridworld/observation/metrics.jsonl",
-      "sha256": "10a196501e7c685d32bb631c70de34fc3f67f6986f159ceae03afe9f8fec6fbf",
-      "bytes": 159827
+      "path": "gridworld/observation/best_reconstruction/checkpoint_2206.pt",
+      "sha256": "bc2aae06be0a1a28dabc30fab0ca39c09a6a6f2e971d7635829c4c97d926f28e",
+      "bytes": 10415501
     },
     {
       "path": "gridworld/observation/best_reconstruction.json",
-      "sha256": "bb0059bbf73dad19ea334b97aa1d8ef2b8edbdd517ba61da0756406762dfa2f0",
-      "bytes": 562
+      "sha256": "8600df5df1be85af5e315375c2c3ea1347428f112858265e17d6dadb7ac63cca",
+      "bytes": 561
     },
     {
       "path": "arithmetic_factorization/observation/model.pth",
-      "sha256": "0e68e07253b67783d1cd213902e159608e85088ea77379f085e4ac68c0e8047d",
-      "bytes": 797845
+      "sha256": "83ba6afd91c527bb0e9306274310a0250ab0ada3af9893fd4f9873bd9dfc0437",
+      "bytes": 764211
+    },
+    {
+      "path": "arithmetic_factorization/pretraining-data/arith_lv1_10000_samples_train.h5",
+      "sha256": "3b79f7ec33aba092c0b989875034ea95e2b9a3516330e24e36d9da2ae7a49714",
+      "bytes": 21473048
+    },
+    {
+      "path": "arithmetic_factorization/pretraining-data/arith_lv1_1000_samples_test.h5",
+      "sha256": "dc6a13a5c95610151d9d383f50dcdbbfdf41b7a0ef76dd1e7b00d874a3f78dcc",
+      "bytes": 2154224
     },
     {
       "path": "image_editing/observation/model.pth",
@@ -41,13 +36,18 @@
   "archives": [
     {
       "name": "gridworld-observation.tar",
-      "sha256": "d6b43a77288ac80c871b4d47a44159122d8002f9ae6c88dd2d61e89db5a6ff57",
-      "bytes": 11776000
+      "sha256": "4aa5848926f935a046a24bc50ac977a5517fcff3eebee80bcd29d4f8130f2a65",
+      "bytes": 10424320
     },
     {
       "name": "arithmetic_factorization-observation.tar",
-      "sha256": "ef2b021fa8183b212bc8f684e95e94d29261784f2c2b06a2c79655578f26a847",
-      "bytes": 808960
+      "sha256": "f7d9b6728694bb4da674d38e8c3bfa16ab5ae4fa530cdda95a80a6e19bf4ebb8",
+      "bytes": 768000
+    },
+    {
+      "name": "arithmetic_factorization-pretraining-data.tar",
+      "sha256": "23df9051dee8babfdb2c65d18cbc5af8bf635bb760945f653a730ba6f640373a",
+      "bytes": 23633920
     },
     {
       "name": "image_editing-observation.tar",
@@ -55,5 +55,5 @@
       "bytes": 198451200
     }
   ],
-  "release_tag": "reproduction-20260929"
+  "release_tag": "reproduction-20261004"
 }

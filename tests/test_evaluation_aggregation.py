@@ -20,14 +20,14 @@ class MetricModel(nn.Module):
 
 
 def metric_loader(values, rank=0, world_size=1, batch_size=2):
-    dataset = [(torch.tensor([value]), torch.tensor([value]), ()) for value in values]
+    dataset = [torch.tensor([value]) for value in values]
     return _loader(dataset, batch_size=batch_size, num_workers=0, shuffle=False, seed=42,
                    context=DistributedContext(rank, rank, world_size, torch.device('cpu')))[0]
 
 
 def test_uneven_final_batch_is_episode_weighted():
     metrics = evaluate(MetricModel(), metric_loader([0., 0., 3.]), torch.device('cpu'),
-                       coefficient=1.0, precision='32-true')
+                       coefficient=1.0)
     assert metrics['query_l1'] == pytest.approx(1.0)
 
 
@@ -35,7 +35,7 @@ def distributed_worker(rank, rendezvous, output, values):
     torch.distributed.init_process_group('gloo', init_method=rendezvous, rank=rank, world_size=2)
     try:
         loader = metric_loader(values, rank, 2)
-        result = evaluate(MetricModel(), loader, torch.device('cpu'), coefficient=1.0, precision='32-true')
+        result = evaluate(MetricModel(), loader, torch.device('cpu'), coefficient=1.0)
         torch.save({'result': result, 'indices': list(loader.dataset.indices)}, f'{output}/{rank}.pt')
     finally:
         torch.distributed.destroy_process_group()

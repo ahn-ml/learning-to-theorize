@@ -17,12 +17,10 @@ from training.runtime import sha256_file as checkpoint_hash
 HARD_GROUNDING = {"gridworld": True, "arithmetic": True, "image": False}
 
 
-def read_episodes(path: Path, domain: str, limit: int | None = None) -> torch.Tensor:
+def read_episodes(path: Path, domain: str) -> torch.Tensor:
     """Read the same support/query layout as the task loaders, once per sweep."""
     with h5py.File(path, 'r') as file:
         count = int(file.attrs['dataset_length'])
-        if limit is not None:
-            count = min(count, limit)
         first = file['sample_0']['grids'][:]
         shape = (count, 4, *first.shape[1:])
         episodes = np.empty(shape, dtype=np.uint8)
@@ -50,7 +48,7 @@ def build_model(domain: str, alpha: str, device: str):
         model = build_neo('neo', alpha)
     elif domain == 'image':
         from tasks.image_editing.task import build_neo
-        model = build_neo(('neo', alpha))
+        model = build_neo(alpha)
     else:
         raise ValueError(f'unknown domain {domain}')
     return model.to(device).eval()

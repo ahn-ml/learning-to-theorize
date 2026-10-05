@@ -25,7 +25,6 @@ class LatentProgramConfig:
     num_film_layers: int = 4
     dropout: float = 0.0
     max_transition_length: int = 3
-    transition_residual: bool = True
 
     def __post_init__(self) -> None:
         for name in ("state_dim", "action_dim", "num_state_tokens", "num_action_tokens"):

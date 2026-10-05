@@ -21,9 +21,9 @@ def test_fixed_schedule_does_not_require_progress():
                                                 'training.length_control_scheduling':False}})==1.01
 
 
-def test_legacy_weights_load_without_guessing_missing_schedule(tmp_path):
+def test_checkpoint_without_training_configuration_is_rejected(tmp_path):
     model=torch.nn.Linear(1,1)
-    path=tmp_path/'legacy.pt';torch.save(model.state_dict(),path)
+    path=tmp_path/'weights.pt';torch.save({'model_state_dict':model.state_dict()},path)
     metadata={}
     assert load_model_checkpoint(model,path,metadata=metadata)==2
     with pytest.raises(ValueError,match='no training configuration'):

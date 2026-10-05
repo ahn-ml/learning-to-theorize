@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, Mapping
-from urllib.parse import urlsplit, urlunsplit
 
 import numpy as np
 import torch
@@ -24,15 +23,10 @@ WandbMode = Literal["online", "offline", "disabled"]
 
 @dataclass(frozen=True, slots=True)
 class GitSourceState:
-    """Auditable Git state attached to every run directory."""
+    """Source revision attached to every run directory."""
 
-    repository_root: str | None
     commit: str | None
-    branch: str | None
-    remote_url: str | None
     clean: bool
-    pushed: bool
-    working_tree_fingerprint: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,38 +132,16 @@ class MetricLog:
 
 
 def capture_git_source(path: str | Path) -> GitSourceState:
-    """Capture commit, cleanliness, remote reachability, and a dirty fingerprint."""
+    """Capture the checked-out commit and whether the working tree is clean."""
 
-    start = Path(path)
-    root_result = _run_git(start, "rev-parse", "--show-toplevel")
+    root_result = _run_git(Path(path), "rev-parse", "--show-toplevel")
     if root_result is None:
-        return GitSourceState(None, None, None, None, False, False, None)
+        return GitSourceState(commit=None, clean=False)
     root = Path(root_result)
-    commit = _required_git(root, "rev-parse", "HEAD")
-    branch_value = _required_git(root, "rev-parse", "--abbrev-ref", "HEAD")
-    branch = None if branch_value == "HEAD" else branch_value
     status = _required_git(root, "status", "--porcelain=v1", "--untracked-files=all")
-    clean = status == ""
-    remote_url = _run_git(root, "remote", "get-url", "origin")
-    remote_url = _sanitize_remote_url(remote_url) if remote_url else None
-    containing = _run_git(
-        root,
-        "for-each-ref",
-        "--contains",
-        commit,
-        "--format=%(refname:short)",
-        "refs/remotes/origin",
-    )
-    pushed = bool(containing and containing.strip())
-    fingerprint = None if clean else _working_tree_fingerprint(root)
     return GitSourceState(
-        repository_root=str(root),
-        commit=commit,
-        branch=branch,
-        remote_url=remote_url,
-        clean=clean,
-        pushed=pushed,
-        working_tree_fingerprint=fingerprint,
+        commit=_required_git(root, "rev-parse", "HEAD"),
+        clean=status == "",
     )
 
 
@@ -325,39 +297,6 @@ def write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _working_tree_fingerprint(root: Path) -> str:
-    digest = hashlib.sha256()
-    diff = subprocess.run(
-        ["git", "diff", "--binary", "HEAD"],
-        cwd=root,
-        check=True,
-        stdout=subprocess.PIPE,
-    ).stdout
-    digest.update(b"tracked\0")
-    digest.update(diff)
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
-        cwd=root,
-        check=True,
-        stdout=subprocess.PIPE,
-    ).stdout.split(b"\0")
-    for raw_path in sorted(path for path in untracked if path):
-        relative = raw_path.decode("utf-8", errors="surrogateescape")
-        candidate = root / relative
-        digest.update(b"untracked\0")
-        digest.update(raw_path)
-        digest.update(b"\0")
-        if candidate.is_symlink():
-            digest.update(os.readlink(candidate).encode("utf-8"))
-        elif candidate.is_file():
-            with candidate.open("rb") as file:
-                for chunk in iter(lambda: file.read(1024 * 1024), b""):
-                    digest.update(chunk)
-        else:
-            digest.update(b"non-regular")
-    return digest.hexdigest()
-
-
 def _run_git(path: Path, *arguments: str) -> str | None:
     result = subprocess.run(
         ["git", *arguments],
@@ -375,13 +314,3 @@ def _required_git(path: Path, *arguments: str) -> str:
     if result is None:
         raise RuntimeError(f"git {' '.join(arguments)} failed")
     return result
-
-
-def _sanitize_remote_url(value: str) -> str:
-    if "://" not in value:
-        return value
-    parsed = urlsplit(value)
-    hostname = parsed.hostname or ""
-    if parsed.port is not None:
-        hostname = f"{hostname}:{parsed.port}"
-    return urlunsplit((parsed.scheme, hostname, parsed.path, "", ""))

@@ -1,9 +1,8 @@
-"""Generate and verify the released arithmetic factorization artifacts."""
+"""Generate the arithmetic factorization datasets."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 from pathlib import Path
 from typing import Sequence
 
@@ -24,8 +23,8 @@ PAPER_LENGTH_OOD_SAMPLES_PER_PROGRAM = 100
 PAPER_TEST_RATIO = 1 / 11
 PAPER_SEED = 42
 
-# The alpha splits were drawn by a generator revision that no longer exists,
-# so the held-out program index tuples are pinned from the artifact metadata.
+# Held-out program index tuples for each alpha, as recorded in the released
+# artifacts' metadata.
 PAPER_HELD_OUT_COMBINATIONS: dict[str, tuple[tuple[int, ...], ...]] = {
     "1.00": (),
     "0.66": (
@@ -61,14 +60,6 @@ PAPER_HELD_OUT_COMBINATIONS: dict[str, tuple[tuple[int, ...], ...]] = {
 
 def _primitives() -> list[str]:
     return [f"*{value}" for value in PAPER_MULTIPLIERS]
-
-
-def _digest(path: Path) -> str:
-    digest = hashlib.md5()  # noqa: S324 - artifact identity, not security
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _generate_profile(profile: ArithmeticProfile, output_dir: Path) -> None:
@@ -142,7 +133,7 @@ def _generate_length_ood(output_dir: Path) -> None:
 
 
 def generate_all(output_dir: Path) -> int:
-    """Generate every canonical profile, refusing to overwrite existing files."""
+    """Generate every alpha profile and the length-OOD split, skipping existing files."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
     for name in available_profiles():
@@ -162,44 +153,15 @@ def generate_all(output_dir: Path) -> int:
     return 0
 
 
-def verify(output_dir: Path) -> int:
-    """Compare every released artifact against its recorded digest."""
-
-    failures = 0
-    seen: set[str] = set()
-    for name in available_profiles():
-        profile = get_profile(name)
-        for split in profile.splits:
-            artifact = profile.artifact(split)
-            if artifact.filename in seen or not artifact.digest:
-                continue
-            seen.add(artifact.filename)
-            path = output_dir / artifact.filename
-            if not path.exists():
-                print(f"MISSING  {artifact.filename}")
-                failures += 1
-                continue
-            observed = _digest(path)
-            status = "OK      " if observed == artifact.digest else "MISMATCH"
-            if observed != artifact.digest:
-                failures += 1
-            print(f"{status} {artifact.filename}")
-    return 1 if failures else 0
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate or verify arithmetic factorization artifacts."
+        description="Generate arithmetic factorization datasets."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("generate-all", "verify"):
-        subparser = subparsers.add_parser(command)
-        subparser.add_argument("--output-dir", type=Path, required=True)
+    subparser = subparsers.add_parser("generate-all")
+    subparser.add_argument("--output-dir", type=Path, required=True)
     arguments = parser.parse_args(argv)
-    output_dir = arguments.output_dir.expanduser().resolve()
-    if arguments.command == "generate-all":
-        return generate_all(output_dir)
-    return verify(output_dir)
+    return generate_all(arguments.output_dir.expanduser().resolve())
 
 
 if __name__ == "__main__":

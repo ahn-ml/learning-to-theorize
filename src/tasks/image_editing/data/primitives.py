@@ -145,19 +145,6 @@ def non_repeatable_primitives() -> tuple[str, ...]:
     )
 
 
-def apply_program(image: np.ndarray, program: tuple[str, ...]) -> np.ndarray:
-    """Apply a program left to right and return the edited image."""
-
-    result = image.copy()
-    for name in program:
-        try:
-            primitive = PRIMITIVES[name]
-        except KeyError as error:
-            raise ValueError(f"unknown image-editing primitive {name!r}") from error
-        result = primitive(result)
-    return result
-
-
 __all__ = [
     "BRIGHTNESS_MINUS_FACTOR",
     "BRIGHTNESS_PLUS_FACTOR",
@@ -171,7 +158,6 @@ __all__ = [
     "PRIMITIVES",
     "Primitive",
     "ROTATION_DEGREES",
-    "apply_program",
     "non_repeatable_primitives",
     "primitive_names",
     "repeatable_primitives",

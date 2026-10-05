@@ -6,7 +6,6 @@ from tasks.gridworld.data.artifacts import (
     get_artifact_spec,
     paper_artifacts,
     verify_artifact,
-    verify_artifact_directory,
     verify_profile_artifacts,
 )
 from tasks.gridworld.data.generator import (
@@ -16,10 +15,7 @@ from tasks.gridworld.data.generator import (
 )
 from tasks.gridworld.data.hdf5 import (
     GridWorldHDF5Writer,
-    VerificationResult,
     episode_to_hdf5_arrays,
-    hdf5_arrays_to_episode,
-    verify_profile,
     write_profile,
 )
 from tasks.gridworld.data.profiles import (
@@ -54,7 +50,6 @@ __all__ = [
     "Program",
     "ShapePool",
     "SplitSpec",
-    "VerificationResult",
     "alpha_split",
     "available_profiles",
     "canonical_programs",
@@ -62,14 +57,11 @@ __all__ = [
     "generate_canonical_shape_pool",
     "get_artifact_spec",
     "get_profile",
-    "hdf5_arrays_to_episode",
     "load_shape_pool",
     "paper_artifacts",
     "save_shape_pool",
     "shape_pool_pickle_bytes",
-    "verify_profile",
     "verify_artifact",
-    "verify_artifact_directory",
     "verify_profile_artifacts",
     "write_profile",
 ]

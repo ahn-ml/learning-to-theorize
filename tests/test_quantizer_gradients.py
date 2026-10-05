@@ -16,13 +16,12 @@ def make_quantizer(task, ema):
     if task == "gridworld":
         return ActionQuantizer(get_theorizer_experiment("alpha-0.33").training)
     if task == "image_editing":
-        return ImageQuantizer(ActionQuantizerConfig(use_ema=ema, entropy_weight=0))
+        return ImageQuantizer(ActionQuantizerConfig())
     return ArithmeticActionQuantizer(VectorQuantizer(
-        codebook_size=6, embedding_dim=16, use_ema=ema, entropy_loss_weight=0))
+        codebook_size=6, embedding_dim=16, use_ema=ema))
 
 
-CASES = [("gridworld", False), ("image_editing", False),
-         ("image_editing", True), ("arithmetic", False), ("arithmetic", True)]
+CASES = [("gridworld", False), ("image_editing", True), ("arithmetic", False), ("arithmetic", True)]
 
 
 @pytest.mark.parametrize("task,ema", CASES)

@@ -1,15 +1,13 @@
-"""Paper-exact deterministic GridWorld rollout evaluation and CLI runner."""
+"""GridWorld rollout evaluation: standard NEO and test-time scaling (NEO-S)."""
 
 from __future__ import annotations
 
-import argparse
-import math
 import platform
 import socket
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Literal, Mapping, Sequence
+from typing import Any, Iterable, Literal, Mapping
 
 import h5py
 import numpy as np
@@ -20,9 +18,7 @@ from tasks.gridworld.data.profiles import get_profile
 from models.neo import NEO
 from tasks.gridworld.theorizer_config import (
     GRIDWORLD_LENGTH_OOD_ARTIFACT_SHA256,
-    GRIDWORLD_THEORIZER_SEEDS,
     GridWorldAlphaExperiment,
-    available_theorizer_experiments,
     get_theorizer_experiment,
 )
 from tasks.gridworld.theorizer_runner import (
@@ -51,12 +47,10 @@ from training.runtime import (
 
 EvaluationSplit = Literal["id", "compositional-ood", "length-ood"]
 EvaluationProtocol = Literal["standard", "test-time-scaling"]
-EvaluationMethod = Literal[
-    "neo",
-]
 PAPER_EVALUATION_SEED = 42
 PAPER_SCALING_BUDGETS = (1, 4, 16, 64)
 PAPER_SCALING_TEMPERATURE = 0.3
+EVALUATION_BATCH_SIZE = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,61 +126,36 @@ class GridWorldEvaluationArtifact:
 
 @dataclass(frozen=True, slots=True)
 class GridWorldEvaluationRunConfig:
+    """One NEO checkpoint evaluated on one split with one protocol.
+
+    ``strict=False`` is for tests: it allows a sample limit, the CPU, and data
+    other than the released evaluation artifacts.
+    """
+
     experiment: str
     model_seed: int
     split: EvaluationSplit
     checkpoint: Path
     data_h5: Path
     output_root: Path
-    method: EvaluationMethod = "neo"
     protocol: EvaluationProtocol = "standard"
-    scaling_budgets: tuple[int, ...] = PAPER_SCALING_BUDGETS
-    sample_temperature: float = PAPER_SCALING_TEMPERATURE
-    run_name: str | None = None
-    batch_size: int = 128
-    num_workers: int = 0
     num_samples: int | None = None
     wandb_project: str = "LearningToTheorize"
     wandb_entity: str | None = None
     wandb_group: str | None = None
     wandb_mode: WandbMode = "online"
-    canonical: bool = True
+    strict: bool = True
     force_cpu: bool = False
     hard_grounding: bool = True
 
     def __post_init__(self) -> None:
-        if self.method == "neo":
-            get_theorizer_experiment(self.experiment)
-        else:
-            raise ValueError(f"unknown GridWorld evaluation method: {self.method}")
+        get_theorizer_experiment(self.experiment)
         if self.protocol not in ("standard", "test-time-scaling"):
             raise ValueError(f"unknown evaluation protocol: {self.protocol}")
         if self.model_seed < 0:
             raise ValueError("model_seed must be non-negative")
-        if self.batch_size < 1 or self.num_workers < 0:
-            raise ValueError("batch_size must be positive and num_workers non-negative")
         if self.num_samples is not None and self.num_samples < 1:
             raise ValueError("num_samples must be positive when provided")
-        _validate_scaling_settings(
-            self.scaling_budgets,
-            sample_temperature=self.sample_temperature,
-        )
-        if self.protocol == "standard" and (
-            self.scaling_budgets != PAPER_SCALING_BUDGETS
-            or self.sample_temperature != PAPER_SCALING_TEMPERATURE
-        ):
-            raise ValueError(
-                "scaling settings require protocol test-time-scaling"
-            )
-        if self.canonical and self.protocol == "test-time-scaling":
-            if self.scaling_budgets != PAPER_SCALING_BUDGETS:
-                raise ValueError(
-                    "canonical test-time scaling requires budgets 1,4,16,64"
-                )
-            if self.sample_temperature != PAPER_SCALING_TEMPERATURE:
-                raise ValueError(
-                    "canonical test-time scaling requires sample temperature 0.3"
-                )
         if self.split == "compositional-ood" and self.experiment == "alpha-1.00":
             raise ValueError("alpha-1.00 has no held-out compositional split")
 
@@ -198,8 +167,6 @@ class GridWorldEvaluationRunConfig:
 
     @property
     def resolved_run_name(self) -> str:
-        if self.run_name is not None:
-            return self.run_name
         suffix = "" if self.protocol == "standard" else f"-{self.protocol}"
         return (
             f"gridworld-{self.experiment}-seed-{self.model_seed}-{self.split}"
@@ -306,8 +273,7 @@ def self_explanation_rollout(
         for _ in range(max_steps):
             action = model.theory_programmer(current, target_state)
             values, indices = _quantize_for_evaluation(model, action)
-            if indices is not None:
-                action_indices.append(_indices_tuple(indices))
+            action_indices.append(_indices_tuple(indices))
             current = model.program_executor(current, values)
             prediction = model.decoder(current).argmax(dim=-1).squeeze(0)
             if hard_grounding:
@@ -355,8 +321,7 @@ def transfer_rollout(
             action = model.theory_programmer(current, support_target)
             values, indices = _quantize_for_evaluation(model, action)
             extracted_actions.append(values.clone())
-            if indices is not None:
-                action_indices.append(_indices_tuple(indices))
+            action_indices.append(_indices_tuple(indices))
             current = model.program_executor(current, extracted_actions[-1])
             support_prediction = model.decoder(current).argmax(dim=-1)
             if hard_grounding:
@@ -453,7 +418,7 @@ def load_theorizer_checkpoint(
     expected_method: str | None = None,
     expected_seed: int | None = None,
 ) -> Mapping[str, Any]:
-    """Load a release checkpoint written by the public training runner."""
+    """Load a checkpoint written by the GridWorld NEO training runner."""
 
     checkpoint_path = Path(path).expanduser().resolve(strict=True)
     payload: Any = torch.load(
@@ -461,17 +426,14 @@ def load_theorizer_checkpoint(
         map_location="cpu",
         weights_only=True,
     )
-    if not isinstance(payload, dict):
-        raise ValueError("theorizer checkpoint must contain a mapping")
-    release_format = payload.get("format_version") == 1
-    if not release_format:
-        raise ValueError("evaluation requires a release-format checkpoint")
-    state_dict = payload.get("model_state_dict", payload)
+    if not isinstance(payload, dict) or payload.get("format_version") != 1:
+        raise ValueError("evaluation requires a checkpoint written by the GridWorld NEO runner")
+    state_dict = payload.get("model_state_dict")
     if not isinstance(state_dict, Mapping):
         raise ValueError("theorizer checkpoint has no model_state_dict")
     arguments = payload.get("args")
     if not isinstance(arguments, dict):
-        raise ValueError("release checkpoint is missing resolved arguments")
+        raise ValueError("theorizer checkpoint is missing resolved arguments")
     if expected_experiment is not None and arguments.get("experiment") != expected_experiment:
         raise ValueError("checkpoint experiment does not match evaluation")
     checkpoint_method = arguments.get("method", "neo")
@@ -486,7 +448,7 @@ def load_theorizer_checkpoint(
 def run_theorizer_evaluation(
     config: GridWorldEvaluationRunConfig,
 ) -> tuple[Path, GridWorldEvaluationResult | GridWorldTestTimeScalingResult]:
-    """Run one auditable paper evaluation and write local/W&B evidence."""
+    """Run one evaluation and write its local and W&B records."""
 
     context = initialize_distributed(force_cpu=config.force_cpu)
     if context.world_size != 1:
@@ -509,7 +471,7 @@ def run_theorizer_evaluation(
     write_json_exclusive(output / "source.json", asdict(source))
     write_json_atomic(
         output / "status.json",
-        _status("running", config.canonical, protocol=config.protocol),
+        _status("running", protocol=config.protocol),
     )
 
     metric_log: MetricLog | None = None
@@ -521,13 +483,13 @@ def run_theorizer_evaluation(
             ExperimentTrackingConfig(
                 project=config.wandb_project,
                 entity=config.wandb_entity,
-                group=config.wandb_group or f"gridworld-{config.method}-{config.experiment}",
+                group=config.wandb_group or f"gridworld-neo-{config.experiment}",
                 name=config.resolved_run_name,
                 mode=config.wandb_mode,
                 tags=(
                     "gridworld",
                     "paper-evaluation",
-                    config.method,
+                    "neo",
                     config.split,
                     config.protocol,
                 ),
@@ -540,21 +502,21 @@ def run_theorizer_evaluation(
             model,
             config.checkpoint,
             expected_experiment=config.experiment,
-            expected_method=config.method,
+            expected_method="neo",
             expected_seed=config.model_seed,
         )
         model.to(context.device).eval()
         loader = build_theorizer_loader(
             config.data_h5,
-            batch_size=config.batch_size,
-            num_workers=config.num_workers,
+            batch_size=EVALUATION_BATCH_SIZE,
+            num_workers=0,
             seed=PAPER_EVALUATION_SEED,
             shuffle=False,
             pin_memory=context.device.type == "cuda",
             episode_limit=config.num_samples,
         )
         batches = loader.batches()
-        _consume_historical_dataloader_iterator_seed()
+        _draw_dataloader_base_seed()
         if config.protocol == "standard":
             result: GridWorldEvaluationResult | GridWorldTestTimeScalingResult = (
                 evaluate_theorizer(
@@ -571,21 +533,20 @@ def run_theorizer_evaluation(
                 model,
                 batches,
                 max_steps=artifact.max_steps,
-                budgets=config.scaling_budgets,
-                sample_temperature=config.sample_temperature,
+                budgets=PAPER_SCALING_BUDGETS,
+                sample_temperature=PAPER_SCALING_TEMPERATURE,
                 device=context.device,
                 num_samples=config.num_samples,
                 hard_grounding=config.hard_grounding,
             )
-        legacy = result.legacy_dict()
-        write_json_exclusive(output / "result.json", legacy)
-        metrics = _flat_metrics(legacy)
+        record = result.legacy_dict()
+        write_json_exclusive(output / "result.json", record)
+        metrics = _flat_metrics(record)
         metric_log.log(metrics)
         write_json_atomic(
             output / "status.json",
             _status(
                 "completed",
-                config.canonical,
                 protocol=config.protocol,
                 result="result.json",
             ),
@@ -597,7 +558,6 @@ def run_theorizer_evaluation(
             output / "status.json",
             _status(
                 "failed",
-                config.canonical,
                 protocol=config.protocol,
                 error=f"{type(error).__name__}: {error}",
             ),
@@ -614,15 +574,13 @@ def _indices_tuple(indices: Tensor) -> tuple[int, ...]:
     return tuple(int(value) for value in indices.detach().reshape(-1).cpu().tolist())
 
 
-def _consume_historical_dataloader_iterator_seed() -> int:
-    """Match the final evaluator's generator-less DataLoader iteration.
+def _draw_dataloader_base_seed() -> int:
+    """Draw one int64 from the global generator before evaluation starts.
 
-    PyTorch draws one int64 base seed from the global generator whenever a
-    DataLoader iterator is constructed, even with zero workers.  The pinned
-    evaluator left ``generator=None``.  The shared release loader uses a
-    dedicated generator because theorizer training checkpoints its state, so
-    evaluation must preserve this one global draw explicitly before NEO-S
-    sampling.
+    A DataLoader without its own generator takes this draw for its base seed
+    when an iterator is created, even with zero workers. The evaluation loader
+    has a dedicated generator, so the draw is made here; it fixes the global
+    random stream that NEO-S sampling consumes.
     """
 
     return int(torch.empty((), dtype=torch.int64).random_().item())
@@ -632,16 +590,10 @@ def _quantize_for_evaluation(
     model: NEO,
     action: Tensor,
 ) -> tuple[Tensor, Tensor]:
-    """Accept a result dataclass or a tuple of evaluation metrics."""
+    """Return the nearest-code values and indices."""
 
     quantized = model.quantizer(action, training_mode=False)
-    if hasattr(quantized, "values") and hasattr(quantized, "indices"):
-        return quantized.values, quantized.indices
-    if isinstance(quantized, tuple) and len(quantized) == 2:
-        values, metadata = quantized
-        if isinstance(metadata, Mapping) and "min_encoding_indices" in metadata:
-            return values, metadata["min_encoding_indices"]
-    raise TypeError("unsupported action quantizer evaluation result")
+    return quantized.values, quantized.indices
 
 
 def _validate_run_mode(
@@ -649,16 +601,14 @@ def _validate_run_mode(
     context: DistributedContext,
     source: GitSourceState,
 ) -> None:
-    if not config.canonical:
+    if not config.strict:
         return
-    if config.model_seed not in GRIDWORLD_THEORIZER_SEEDS:
-        raise ValueError("canonical evaluation requires model seed 42, 43, or 44")
     if config.num_samples is not None or config.force_cpu:
-        raise ValueError("canonical evaluation cannot limit samples or force CPU")
+        raise ValueError("a full evaluation cannot limit samples or force CPU")
     if context.device.type != "cuda" or torch.cuda.device_count() != 1:
-        raise ValueError("canonical evaluation requires exactly one visible CUDA GPU")
+        raise ValueError("a full evaluation requires exactly one visible CUDA GPU")
     if config.wandb_mode == "disabled":
-        raise ValueError("canonical evaluation requires online or offline W&B")
+        raise ValueError("a full evaluation requires online or offline W&B")
 
 
 def _artifact_evidence(
@@ -679,9 +629,9 @@ def _artifact_evidence(
             "sha256": sha256_file(checkpoint),
         },
     }
-    if config.canonical:
+    if config.strict:
         if data.name != expected.filename:
-            raise ValueError(f"canonical data filename must be {expected.filename}")
+            raise ValueError(f"evaluation data filename must be {expected.filename}")
         if evidence["data"]["sha256"] != expected.sha256:
             raise ValueError("evaluation data does not match the paper SHA-256")
         with h5py.File(data, "r") as file:
@@ -691,7 +641,7 @@ def _artifact_evidence(
 
 
 def _paper_hdf5_episode_count(file: h5py.File) -> int:
-    """Validate and count the paper artifact's root-level sample groups."""
+    """Validate and count the artifact's root-level sample groups."""
 
     raw_length = file.attrs.get("dataset_length")
     if raw_length is None:
@@ -717,7 +667,7 @@ def _paper_hdf5_episode_count(file: h5py.File) -> int:
         index = int(name[len(prefix) :])
         if name != f"{prefix}{index}":
             raise ValueError(
-                f"evaluation artifact has non-canonical sample name {name!r}"
+                f"evaluation artifact has an unexpected sample name {name!r}"
             )
         sample_indices.add(index)
 
@@ -739,8 +689,7 @@ def _resolved_config(
         "schema_version": 1,
         "domain": "gridworld",
         "stage": "theorizer_evaluation",
-        "canonical": config.canonical,
-        "method": config.method,
+        "method": "neo",
         "experiment": config.experiment,
         "model_seed": config.model_seed,
         "evaluation_seed": PAPER_EVALUATION_SEED,
@@ -751,8 +700,7 @@ def _resolved_config(
         "protocol": config.protocol,
         "split": config.split,
         "max_steps": artifact.max_steps,
-        "batch_size": config.batch_size,
-        "num_workers": config.num_workers,
+        "batch_size": EVALUATION_BATCH_SIZE,
         "num_samples": config.num_samples,
         "rollout": {
             "action_selection": (
@@ -767,8 +715,8 @@ def _resolved_config(
         },
         "test_time_scaling": (
             {
-                "budgets": list(config.scaling_budgets),
-                "sample_temperature": config.sample_temperature,
+                "budgets": list(PAPER_SCALING_BUDGETS),
+                "sample_temperature": PAPER_SCALING_TEMPERATURE,
                 "sample_max_budget_once": True,
                 "reuse_nested_prefixes": True,
                 "selection": "majority_action_sequence",
@@ -782,7 +730,7 @@ def _resolved_config(
         "tracking": {
             "project": config.wandb_project,
             "entity": config.wandb_entity,
-            "group": config.wandb_group or f"gridworld-{config.method}-{config.experiment}",
+            "group": config.wandb_group or f"gridworld-neo-{config.experiment}",
             "mode": config.wandb_mode,
         },
         "environment": {
@@ -798,157 +746,17 @@ def _resolved_config(
     }
 
 
-def _flat_metrics(legacy: Mapping[str, Any]) -> dict[str, int | float]:
+def _flat_metrics(record: Mapping[str, Any]) -> dict[str, int | float]:
     return {
         key: value
-        for key, value in legacy.items()
+        for key, value in record.items()
         if isinstance(value, (int, float)) and not isinstance(value, bool)
     }
 
 
-def _status(status: str, canonical: bool, **extra: Any) -> dict[str, Any]:
+def _status(status: str, **extra: Any) -> dict[str, Any]:
     return {
         "status": status,
-        "canonical": canonical,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         **extra,
     }
-
-
-def _validate_scaling_settings(
-    budgets: Sequence[int],
-    *,
-    sample_temperature: float,
-) -> None:
-    resolved = tuple(budgets)
-    if not resolved or any(
-        isinstance(value, bool) or not isinstance(value, int) or value < 1
-        for value in resolved
-    ):
-        raise ValueError("scaling budgets must contain positive integers")
-    if tuple(sorted(set(resolved))) != resolved:
-        raise ValueError("scaling budgets must be unique and strictly increasing")
-    if not math.isfinite(sample_temperature) or sample_temperature <= 0:
-        raise ValueError("sample temperature must be positive")
-
-
-def parse_scaling_budgets(value: str) -> tuple[int, ...]:
-    parts = tuple(part.strip() for part in value.split(","))
-    if not parts or any(not part for part in parts):
-        raise argparse.ArgumentTypeError(
-            "scaling budgets must be comma-separated integers without blanks"
-        )
-    try:
-        budgets = tuple(int(part) for part in parts)
-        _validate_scaling_settings(
-            budgets,
-            sample_temperature=PAPER_SCALING_TEMPERATURE,
-        )
-    except ValueError as error:
-        raise argparse.ArgumentTypeError(str(error)) from error
-    return budgets
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Evaluate one GridWorld model")
-    parser.add_argument(
-        "--method",
-        choices=("neo",),
-        default="neo",
-        help="paper method to evaluate (default: neo)",
-    )
-    parser.add_argument("--experiment", choices=available_theorizer_experiments(), required=True)
-    parser.add_argument("--model-seed", type=int, required=True)
-    parser.add_argument(
-        "--protocol",
-        choices=("standard", "test-time-scaling"),
-        default="standard",
-    )
-    parser.add_argument(
-        "--split",
-        choices=("id", "compositional-ood", "length-ood"),
-        required=True,
-    )
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--data-h5", type=Path, required=True)
-    parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--run-name")
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        help="evaluation batch size (paper default: 128)",
-    )
-    parser.add_argument("--num-workers", type=int, default=0)
-    parser.add_argument(
-        "--scaling-budgets",
-        type=parse_scaling_budgets,
-        default=PAPER_SCALING_BUDGETS,
-        metavar="K1,K2,...",
-        help="nested NEO-S sample budgets (paper: 1,4,16,64)",
-    )
-    parser.add_argument(
-        "--sample-temperature",
-        type=float,
-        default=PAPER_SCALING_TEMPERATURE,
-        help="NEO-S VQ sampling temperature (paper: 0.3)",
-    )
-    parser.add_argument("--wandb-project", default="LearningToTheorize")
-    parser.add_argument("--wandb-entity")
-    parser.add_argument("--wandb-group")
-    parser.add_argument("--wandb-mode", choices=("online", "offline", "disabled"), default="online")
-    parser.add_argument("--hard-grounding", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--development", action="store_true")
-    parser.add_argument("--development-cpu", action="store_true")
-    parser.add_argument("--development-num-samples", type=int)
-    return parser
-
-
-def _config_from_arguments(arguments: argparse.Namespace) -> GridWorldEvaluationRunConfig:
-    if not arguments.development and (
-        arguments.development_cpu
-        or arguments.development_num_samples is not None
-    ):
-        raise ValueError("development overrides require --development")
-    return GridWorldEvaluationRunConfig(
-        method=arguments.method,
-        experiment=arguments.experiment,
-        model_seed=arguments.model_seed,
-        split=arguments.split,
-        checkpoint=arguments.checkpoint,
-        data_h5=arguments.data_h5,
-        output_root=arguments.output_root,
-        protocol=arguments.protocol,
-        scaling_budgets=arguments.scaling_budgets,
-        sample_temperature=arguments.sample_temperature,
-        run_name=arguments.run_name,
-        batch_size=(
-            arguments.batch_size
-            if arguments.batch_size is not None
-            else 128
-        ),
-        num_workers=arguments.num_workers,
-        num_samples=arguments.development_num_samples,
-        wandb_project=arguments.wandb_project,
-        wandb_entity=arguments.wandb_entity,
-        wandb_group=arguments.wandb_group,
-        wandb_mode=arguments.wandb_mode,
-        canonical=not arguments.development,
-        force_cpu=arguments.development_cpu,
-        hard_grounding=arguments.hard_grounding,
-    )
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    config = _config_from_arguments(build_parser().parse_args(argv))
-    output, result = run_theorizer_evaluation(config)
-    print(f"output_directory={output}")
-    if isinstance(result, GridWorldEvaluationResult):
-        print(f"transfer_grid_accuracy={result.transfer.grid_accuracy:.6f}")
-    else:
-        maximum = result.budgets[-1]
-        print(f"select@{maximum.budget}_transfer={maximum.select_transfer:.6f}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

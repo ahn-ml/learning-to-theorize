@@ -240,7 +240,7 @@ def generate_evenly_distributed_dataset(primitives_list: List[str],
     for prog in held_out_programs:
         held_out_by_length[len(prog)].append(prog)
 
-    print(f"\nProgram statistics:")
+    print("\nProgram statistics:")
     total_programs = 0
     total_held_out = 0
     for length in sorted(set(list(programs_by_length.keys()) + list(held_out_by_length.keys()))):
@@ -401,7 +401,7 @@ def generate_evenly_distributed_dataset(primitives_list: List[str],
         if overlap:
             print(f"  WARNING: Found {len(overlap)} overlapping programs!")
         else:
-            print(f"  ✓ No program overlap between train and held-out test")
+            print("  ✓ No program overlap between train and held-out test")
 
     return (train_dataset, train_programs), (test_dataset, test_programs), (held_out_dataset, held_out_programs_final)
 
@@ -478,44 +478,3 @@ def save_dataset_to_h5(dataset: np.ndarray,
             sample_group.attrs['out1'] = int(out1)
 
     print(f"  Saved {len(dataset)} samples")
-
-
-def load_dataset_from_h5(h5_path: str) -> Tuple[np.ndarray, np.ndarray, List[str], dict]:
-    """
-    Load arithmetic dataset from H5 file.
-
-    Args:
-        h5_path: Path to H5 file
-
-    Returns:
-        grids: Array of shape (N, 3, 1, max_digits)
-        answers: Array of shape (N, 1, max_digits)
-        programs: List of program strings
-        metadata: Dictionary with dataset metadata
-    """
-    with h5py.File(h5_path, 'r') as f:
-        num_samples = f.attrs['num_samples']
-        max_digit_length = f.attrs['max_digit_length']
-
-        grids_list = []
-        answers_list = []
-        programs_list = []
-
-        for i in range(num_samples):
-            sample_group = f[f'sample_{i}']
-
-            grids_list.append(sample_group['grids'][:])
-            answers_list.append(sample_group['answer'][:])
-            programs_list.append(sample_group.attrs['program'])
-
-        grids = np.array(grids_list)
-        answers = np.array(answers_list)
-
-        metadata = {
-            'num_samples': num_samples,
-            'dataset_length': f.attrs.get('dataset_length', num_samples),
-            'max_digit_length': max_digit_length,
-            'format': f.attrs.get('format', 'unknown')
-        }
-
-        return grids, answers, programs_list, metadata

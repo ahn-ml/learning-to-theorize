@@ -1,4 +1,4 @@
-"""Pretrain the shared digit autoencoder consumed by every arithmetic method."""
+"""Pretrain the digit autoencoder that NEO training transfers and freezes."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from tasks.arithmetic_factorization.observation_pretraining import (
     ArithmeticObservationPretrainingConfig,
-    observation_pretraining_config,
 )
 from training.optimization import (
     OptimizationConfig,
@@ -30,71 +29,67 @@ def pretraining_parameters(
     *,
     steps_per_epoch: int,
 ) -> DictConfig:
-    """Build the released parameter tree for the pretraining stage."""
+    """Build the parameter tree for the pretraining model."""
 
     total_steps = config.epochs * steps_per_epoch
     return OmegaConf.create(
         {
-            "max_transition_length": config.max_transition_length,
             "codebook_size": config.action_codebook_size,
-            "use_one_codebook": True,
-            "use_vae": False,
-            "vae_deterministic": True,
             "grid_dim": config.num_digits,
             "num_colors": config.num_symbols,
-            "num_train_pairs": 1,
             "state_dim": config.state_dim,
             "action_dim": config.action_dim,
             "num_state_tokens": config.num_state_tokens,
             "num_action_tokens": config.num_action_tokens,
-            "do_auto_recon": True,
             "length_control_coeff": 1.0,
-            "encoder": {"type": "digit", "dropout": 0.0, "d_model": 32},
-            "decoder": {"type": "digit", "dropout": 0.0, "d_model": 32},
             "policy": {
-                "type": "transformer", "d_model": 32, "d_ff": 32,
+                "d_model": 32, "d_ff": 32,
                 "num_heads": 2, "num_layers": 4, "dropout": 0.0,
-                "use_sinusoidal_state_pos": False,
             },
             "transition": {
                 "type": "transformer", "d_model": 32, "d_ff": 32,
                 "num_heads": 2, "num_layers": 4, "dropout": 0.0,
-                "use_residual": False,
-                "use_sinusoidal_state_pos": False,
             },
             "vq": {
                 "action": {
-                    "codebook_size": 6,
                     "commitment_cost": 0.25,
-                    "entropy_loss_weight": 0.0,
-                    "entropy_temperature": 1.0,
-                    "diversity_loss_weight": 0.0,
                     "use_ema": False,
                     "ema_decay": 0.99,
-                    "orthogonal_reg_weight": 0.0,
-                    "orthogonal_reg_max_codes": None,
-                    "stochastic": True,
                     "tau_start": 0.3,
                     "tau_end": 0.05,
-                    "scheduling_ratio": 0.25,
                     "tau_steps": int(total_steps * 0.25),
                 }
-            },
-            "loss_weights": {
-                "recon_loss": config.reconstruction_weight,
-                "auto_recon_loss": config.auto_reconstruction_weight,
-                "action_vq_loss": config.action_vq_weight,
-                "grounding_loss": config.grounding_weight,
-                "action_vae_beta": 1.0,
             },
             "total_steps": total_steps,
         }
     )
 
 
+def evaluate_reconstruction(model, loader, fabric) -> dict[str, float]:
+    """Average digit reconstruction loss and accuracy over this rank's shard."""
+
+    from tasks.arithmetic_factorization.data.dataset import unpack_batch
+
+    totals: dict[str, float] = {}
+    episodes = 0
+    model.eval()
+    with torch.no_grad():
+        for batch in loader:
+            data, _ = unpack_batch(batch, fabric.device)
+            output = model(data, is_eval=True)
+            observed = {
+                "reconstruction_loss": float(output.auto_reconstruction_loss),
+                "digit_accuracy": output.auto_reconstruction_metrics.digit_accuracy,
+                "number_accuracy": output.auto_reconstruction_metrics.number_accuracy,
+            }
+            for key, value in observed.items():
+                totals[key] = totals.get(key, 0.0) + value * len(data)
+            episodes += len(data)
+    return {key: value / max(episodes, 1) for key, value in totals.items()}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pretraining-profile", choices=("recovered", "appendix"), default="recovered")
     parser.add_argument("--train-h5", required=True, type=Path)
     parser.add_argument("--test-h5", required=True, type=Path)
     parser.add_argument("--output-root", required=True, type=Path)
@@ -108,8 +103,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     from lightning.fabric.strategies import DDPStrategy
 
     from tasks.arithmetic_factorization.data.dataset import build_dataloader, unpack_batch
+    from tasks.arithmetic_factorization.fabric_output import fabric_output_hook
     from tasks.arithmetic_factorization.task import ArithmeticObservationModel
-    from tasks.arithmetic_factorization.theorizer_runner import _evaluate
     from training.runtime import (
         ExperimentTrackingConfig,
         MetricLog,
@@ -117,8 +112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed_everything,
     )
 
-    config = observation_pretraining_config(arguments.pretraining_profile)
-    source = capture_git_source(Path(__file__).resolve().parent)
+    config = ArithmeticObservationPretrainingConfig()
     fabric = Fabric(
         accelerator="auto",
         devices=config.effective_world_size,
@@ -150,8 +144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parameters = pretraining_parameters(config, steps_per_epoch=len(train_loader))
     total_steps = int(parameters.total_steps)
-    from tasks.arithmetic_factorization.fabric_output import fabric_output_hook
-    model = ArithmeticObservationModel(parameters, config=config)
+    model = ArithmeticObservationModel(parameters, config)
     model.register_forward_hook(fabric_output_hook)
 
     optimizer = build_program_optimizer(
@@ -186,8 +179,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         "schema_version": 1,
         "domain": "arithmetic_factorization",
         "stage": "pretraining",
-        "canonical": True,
-        "pretraining_profile": arguments.pretraining_profile,
         "observation_architecture": "digit-embedding-linear",
         "use_vae": False,
         "parameters": asdict(config),
@@ -223,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     global_step = 0
     try:
         for epoch in range(config.epochs):
-            metrics = _evaluate(model, test_loader, fabric)
+            metrics = evaluate_reconstruction(model, test_loader, fabric)
             if metric_log is not None:
                 metric_log.log(
                     {
@@ -231,26 +222,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "global_step": global_step,
                         **{f"test/{k}": v for k, v in metrics.items()},
                     }
-                )
-            if (
-                fabric.global_rank == 0
-                and (epoch + 1) % config.save_interval_epochs == 0
-            ):
-                torch.save(
-                    {
-                        "format_version": 1,
-                        "epoch": epoch,
-                        "global_step": global_step,
-                        "model_state_dict": (
-                            model.module.state_dict()
-                            if hasattr(model, "module")
-                            else model.state_dict()
-                        ),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "scheduler_state_dict": scheduler.state_dict(),
-                        "config": resolved,
-                    },
-                    checkpoints / f"checkpoint_{global_step + 1}.pth",
                 )
 
             model.train()
