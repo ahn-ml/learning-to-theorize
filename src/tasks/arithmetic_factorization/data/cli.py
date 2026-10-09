@@ -17,10 +17,12 @@ from tasks.arithmetic_factorization.data.profiles import (
 
 # The released artifacts were produced with these exact generator settings.
 PAPER_MAX_DIGITS = 6
-PAPER_MAX_INPUT_VALUE = 999999
+# The largest input whose x7 output has six digits (999999 // 7).
+PAPER_MAX_INPUT_VALUE = 142857
 PAPER_SAMPLES_PER_PROGRAM = 10000
 PAPER_LENGTH_OOD_SAMPLES_PER_PROGRAM = 100
 PAPER_TEST_RATIO = 1 / 11
+PAPER_LENGTH_OOD_TEST_RATIO = 1e-4
 PAPER_SEED = 42
 
 # Held-out program index tuples for each alpha, as recorded in the released
@@ -81,12 +83,15 @@ def _generate_profile(profile: ArithmeticProfile, output_dir: Path) -> None:
             seed=PAPER_SEED,
         )
     )
-    metadata = {
-        "primitives": _primitives(),
-        "allowed_lengths": list(PAPER_TRAIN_LENGTHS),
-        "samples_per_program": PAPER_SAMPLES_PER_PROGRAM,
-        "held_out_combinations": list(held_out) or None,
-    }
+    # The alpha 1.00 files carry no generator metadata.
+    metadata = None
+    if held_out:
+        metadata = {
+            "primitives": _primitives(),
+            "allowed_lengths": list(PAPER_TRAIN_LENGTHS),
+            "samples_per_program": PAPER_SAMPLES_PER_PROGRAM,
+            "held_out_combinations": list(held_out),
+        }
     save_dataset_to_h5(
         train, train_programs, str(output_dir / profile.train.filename),
         PAPER_MAX_DIGITS, metadata,
@@ -110,18 +115,19 @@ def _generate_length_ood(output_dir: Path) -> None:
     )
     from tasks.arithmetic_factorization.data.profiles import LENGTH_OOD_FILENAME
 
-    (_, _), (test, test_programs), (_, _) = generate_evenly_distributed_dataset(
+    # The length-OOD file is the larger part of this split.
+    (episodes, programs), (_, _), (_, _) = generate_evenly_distributed_dataset(
         primitives_list=_primitives(),
         allowed_lengths=list(PAPER_LENGTH_OOD_LENGTHS),
         samples_per_program=PAPER_LENGTH_OOD_SAMPLES_PER_PROGRAM,
         max_input_value=PAPER_MAX_INPUT_VALUE,
         max_digit_length=PAPER_MAX_DIGITS,
-        test_ratio=PAPER_TEST_RATIO,
+        test_ratio=PAPER_LENGTH_OOD_TEST_RATIO,
         held_out_combinations=None,
         seed=PAPER_SEED,
     )
     save_dataset_to_h5(
-        test, test_programs, str(output_dir / LENGTH_OOD_FILENAME),
+        episodes, programs, str(output_dir / LENGTH_OOD_FILENAME),
         PAPER_MAX_DIGITS,
         {
             "primitives": _primitives(),

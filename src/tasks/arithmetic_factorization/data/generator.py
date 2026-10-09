@@ -437,7 +437,7 @@ def save_dataset_to_h5(dataset: np.ndarray,
         # Save additional metadata if provided
         if metadata:
             for key, value in metadata.items():
-                if isinstance(value, (list, tuple)):
+                if value is None or isinstance(value, (list, tuple)):
                     f.attrs[key] = str(value)
                 else:
                     f.attrs[key] = value
